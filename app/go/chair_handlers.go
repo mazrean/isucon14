@@ -162,6 +162,7 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var ok bool
 	chairLocationCache.Update(chair.ID, func(cl *chairLocation) (*chairLocation, bool) {
 		if cl == nil {
 			return &chairLocation{
@@ -178,6 +179,14 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 			TotalDistanceUpdatedAt: time.Now(),
 		}, true
 	})
+	if !ok {
+		chairLocationCache.Store(chair.ID, &chairLocation{
+			TotalDistance:          0,
+			LastLatitude:           req.Latitude,
+			LastLongitude:          req.Longitude,
+			TotalDistanceUpdatedAt: time.Now(),
+		})
+	}
 
 	rideStatusesCache.Forget(ride.ID)
 
