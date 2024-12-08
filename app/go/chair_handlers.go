@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/oklog/ulid/v2"
 )
@@ -161,11 +162,32 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	chairLocationCache.Update(chair.ID, func(cl *chairLocation) (*chairLocation, bool) {
+		if cl == nil {
+			return &chairLocation{
+				TotalDistance:          0,
+				LastLatitude:           req.Latitude,
+				LastLongitude:          req.Longitude,
+				TotalDistanceUpdatedAt: time.Now(),
+			}, true
+		}
+		return &chairLocation{
+			TotalDistance:          cl.TotalDistance + distance(cl.LastLatitude, cl.LastLongitude, req.Latitude, req.Longitude),
+			LastLatitude:           req.Latitude,
+			LastLongitude:          req.Longitude,
+			TotalDistanceUpdatedAt: time.Now(),
+		}, true
+	})
+
 	rideStatusesCache.Forget(ride.ID)
 
 	writeJSON(w, http.StatusOK, &chairPostCoordinateResponse{
 		RecordedAt: location.CreatedAt.UnixMilli(),
 	})
+}
+
+func distance(lat1, lon1, lat2, lon2 int) int {
+	return int(abs(lat1-lat2) + abs(lon1-lon2))
 }
 
 type simpleUser struct {

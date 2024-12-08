@@ -1,16 +1,13 @@
 package main
 
 import (
-	"context"
 	"database/sql"
 	"errors"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
 
 	isucache "github.com/mazrean/isucon-go-tools/v2/cache"
-	"github.com/motoki317/sc"
 	"github.com/oklog/ulid/v2"
 )
 
@@ -194,53 +191,47 @@ type ownerGetChairResponseChair struct {
 	TotalDistanceUpdatedAt *int64 `json:"total_distance_updated_at,omitempty"`
 }
 
-var chairLocationCache *sc.Cache[string, []chairWithDetail]
-
-func init() {
-	var err error
-	chairLocationCache, err = isucache.New("chairLocationCache", func(ctx context.Context, key string) ([]chairWithDetail, error) {
-		chair := []chairWithDetail{}
-		if err := db.SelectContext(ctx, &chair, `SELECT id,
-       owner_id,
-       name,
-       access_token,
-       model,
-       is_active,
-       created_at,
-       updated_at,
-       IFNULL(total_distance, 0) AS total_distance,
-       total_distance_updated_at
-FROM chairs
-       LEFT JOIN (SELECT chair_id,
-                          SUM(IFNULL(distance, 0)) AS total_distance,
-                          MAX(created_at)          AS total_distance_updated_at
-                   FROM (SELECT chair_id,
-                                created_at,
-                                ABS(latitude - LAG(latitude) OVER (PARTITION BY chair_id ORDER BY created_at)) +
-                                ABS(longitude - LAG(longitude) OVER (PARTITION BY chair_id ORDER BY created_at)) AS distance
-                         FROM chair_locations) tmp
-                   GROUP BY chair_id) distance_table ON distance_table.chair_id = chairs.id
-WHERE owner_id = ?
-`, key); err != nil {
-			return nil, err
-		}
-
-		return chair, nil
-	}, 2*time.Second, 2*time.Second, sc.WithMapBackend(1000))
-	if err != nil {
-		log.Fatalf("failed to create chair location cache: %v", err)
-	}
+type chairLocation struct {
+	TotalDistance          int       `db:"total_distance"`
+	LastLatitude           int       `db:"last_latitude"`
+	LastLongitude          int       `db:"last_longitude"`
+	TotalDistanceUpdatedAt time.Time `db:"total_distance_updated_at"`
 }
+
+var chairLocationCache = isucache.NewAtomicMap[string, *chairLocation]("chairLocationCache")
 
 func ownerGetChairs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	owner := ctx.Value("owner").(*Owner)
 
 	chairs := []chairWithDetail{}
-	var err error
-	if chairs, err = chairLocationCache.Get(ctx, owner.ID); err != nil {
+	if err := db.SelectContext(ctx, &chairs, `SELECT id,
+       owner_id,
+       name,
+       access_token,
+       model,
+       is_active,
+       created_at,
+       updated_at
+FROM chairs WHERE owner_id = ?
+`, owner.ID); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
+	}
+
+	for i := range chairs {
+		chair := &chairs[i]
+
+		location, ok := chairLocationCache.Load(chair.ID)
+		if !ok {
+			continue
+		}
+
+		chair.TotalDistance = location.TotalDistance
+		chair.TotalDistanceUpdatedAt = sql.NullTime{
+			Time:  location.TotalDistanceUpdatedAt,
+			Valid: true,
+		}
 	}
 
 	res := ownerGetChairResponse{}
