@@ -319,6 +319,14 @@ func getLatestRideStatus(ctx context.Context, tx executableGet, rideID string) (
 	return rideStatusesCache.Get(ctx, rideID)
 }
 
+func getLatestRideStatusNoCache(ctx context.Context, tx executableGet, rideID string) (string, error) {
+	status := ""
+	if err := tx.GetContext(ctx, &status, `SELECT status FROM ride_statuses WHERE ride_id = ? ORDER BY created_at DESC LIMIT 1`, rideID); err != nil {
+		return "", err
+	}
+	return status, nil
+}
+
 // New function to count ongoing rides with latest status not "COMPLETED"
 func countOngoingRides(ctx context.Context, tx executableGet, userID string) (int, error) {
 	query := `
@@ -721,7 +729,7 @@ func init() {
 		yetSentRideStatus := RideStatus{}
 		if err := db.GetContext(ctx, &yetSentRideStatus, `SELECT * FROM ride_statuses WHERE ride_id = ? AND app_sent_at IS NULL ORDER BY created_at ASC LIMIT 1`, ride.ID); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				status, err := getLatestRideStatus(ctx, db, ride.ID)
+				status, err := getLatestRideStatusNoCache(ctx, db, ride.ID)
 				if err != nil {
 					return nil, err
 				}
