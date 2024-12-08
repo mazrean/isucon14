@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"time"
 )
 
 // このAPIをインスタンス内から一定間隔で叩かせることで、椅子とライドをマッチングさせる
@@ -37,15 +38,11 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 	query := `
 SELECT c.*
 FROM chairs c
-LEFT JOIN rides r ON r.chair_id = c.id
-LEFT JOIN (
-    SELECT ride_id, (COUNT(chair_sent_at) = 6) AS completed
-    FROM ride_statuses
-    GROUP BY ride_id
-) rs ON rs.ride_id = r.id
+LEFT JOIN rides r ON r.chair_id = c.id 
+LEFT JOIN ride_statuses rs ON rs.ride_id <=> r.id AND rs.status = 'COMPLETED'
 WHERE c.is_active = TRUE
 GROUP BY c.id
-HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0 END) = 0
+HAVING r.id IS NULL OR rs.id IS NOT NULL
 `
 	var chairs []Chair
 	if err := db.SelectContext(ctx, &chairs, query); err != nil {
@@ -110,7 +107,7 @@ HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0
 		}
 
 		// 最適な椅子が見つかったら割り当て
-		if bestIdx >= 0 {
+		if bestIdx >= 0 && (bestDist < 1000 || ride.CreatedAt.Before(time.Now().Add(-30*time.Second))) {
 			assignments = append(assignments, struct {
 				chairID string
 				rideID  string

@@ -780,10 +780,18 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET app_sent_at = CURRENT_TIMESTAMP(6) WHERE ride_id = ? AND app_sent_at IS NULL ORDER BY created_at DESC LIMIT 1`, response.res.Data.RideID)
+	result, err := db.ExecContext(ctx, `UPDATE ride_statuses SET app_sent_at = CURRENT_TIMESTAMP(6) WHERE ride_id = ? AND app_sent_at IS NULL ORDER BY created_at DESC LIMIT 1`, response.res.Data.RideID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if count != 0 {
+		notificationResponseCache.Forget(user.ID)
 	}
 
 	writeJSON(w, http.StatusOK, response.res)
