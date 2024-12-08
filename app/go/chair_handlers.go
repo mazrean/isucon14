@@ -216,7 +216,7 @@ var chairNotificationResponseCache *sc.Cache[string, *chairGetNotificationRespon
 
 func init() {
 	var err error
-	chairNotificationResponseCache, err = isucache.New("notificationResponseCache", func(ctx context.Context, key string) (*chairGetNotificationResponseData, error) {
+	chairNotificationResponseCache, err = isucache.New("chairNotificationResponseCache", func(ctx context.Context, key string) (*chairGetNotificationResponseData, error) {
 		ride := &Ride{}
 		yetSentRideStatus := RideStatus{}
 		status := ""
