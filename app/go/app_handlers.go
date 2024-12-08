@@ -764,7 +764,7 @@ func init() {
 		return &appGetNotificationResponseCache{
 			res: *response,
 		}, nil
-	}, 2*time.Second, 0, sc.WithMapBackend(1000))
+	}, 0, 2*time.Second, sc.WithMapBackend(1000))
 	if err != nil {
 		panic(fmt.Sprintf("failed to create notificationResponseCache: %v", err))
 	}
