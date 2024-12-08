@@ -319,14 +319,6 @@ func getLatestRideStatus(ctx context.Context, tx executableGet, rideID string) (
 	return rideStatusesCache.Get(ctx, rideID)
 }
 
-func getLatestRideStatusNoCache(ctx context.Context, tx executableGet, rideID string) (string, error) {
-	status := ""
-	if err := tx.GetContext(ctx, &status, `SELECT status FROM ride_statuses WHERE ride_id = ? ORDER BY created_at DESC LIMIT 1`, rideID); err != nil {
-		return "", err
-	}
-	return status, nil
-}
-
 // New function to count ongoing rides with latest status not "COMPLETED"
 func countOngoingRides(ctx context.Context, tx executableGet, userID string) (int, error) {
 	query := `
