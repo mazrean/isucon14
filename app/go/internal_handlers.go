@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"time"
 )
 
 // このAPIをインスタンス内から一定間隔で叩かせることで、椅子とライドをマッチングさせる
@@ -106,7 +107,7 @@ HAVING r.id IS NULL OR rs.id IS NOT NULL
 		}
 
 		// 最適な椅子が見つかったら割り当て
-		if bestIdx >= 0 {
+		if bestIdx >= 0 && (bestDist < 1000 || ride.CreatedAt.Before(time.Now().Add(-2*time.Second))) {
 			assignments = append(assignments, struct {
 				chairID string
 				rideID  string
