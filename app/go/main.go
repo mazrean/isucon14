@@ -15,7 +15,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
-	_ "github.com/mazrean/isucon-go-tools/v2"
+	isutools "github.com/mazrean/isucon-go-tools/v2"
 	isudb "github.com/mazrean/isucon-go-tools/v2/db"
 	isuhttp "github.com/mazrean/isucon-go-tools/v2/http"
 )
