@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -117,10 +118,12 @@ func appPostUsers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	accessTokenCache.Forget(accessToken)
 	if err := tx.Commit(); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	ownerCache.Forget(accessToken)
 
 	http.SetCookie(w, &http.Cookie{
 		Path:  "/",
@@ -186,49 +189,6 @@ type getAppRidesResponseItemChair struct {
 	Owner string `json:"owner"`
 	Name  string `json:"name"`
 	Model string `json:"model"`
-}
-
-func getLatestRideStatuses(ctx context.Context, tx executableGet, rideIDs []string) (map[string]string, error) {
-	if len(rideIDs) == 0 {
-		return nil, nil
-	}
-
-	query, args, err := sqlx.In(`
-		SELECT rs.ride_id, rs.status
-		FROM ride_statuses rs
-		INNER JOIN (
-			SELECT ride_id, MAX(created_at) AS max_created_at
-			FROM ride_statuses
-			WHERE ride_id IN (?)
-			GROUP BY ride_id
-		) latest_rs ON rs.ride_id = latest_rs.ride_id AND rs.created_at = latest_rs.max_created_at
-	`, rideIDs)
-	if err != nil {
-		return nil, err
-	}
-
-	query = tx.Rebind(query)
-
-	rows, err := tx.QueryxContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	statuses := make(map[string]string, len(rideIDs))
-	for rows.Next() {
-		var rideID, status string
-		if err := rows.Scan(&rideID, &status); err != nil {
-			return nil, err
-		}
-		statuses[rideID] = status
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return statuses, nil
 }
 
 func appGetRides(w http.ResponseWriter, r *http.Request) {
@@ -1009,8 +969,17 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 
 	// Group rides by chair_id
 	rideMap := make(map[string][]*Ride)
+	rideIDs := make([]string, 0, len(rides))
 	for _, ride := range rides {
 		rideMap[ride.ChairID.String] = append(rideMap[ride.ChairID.String], ride)
+		rideIDs = append(rideIDs, ride.ID)
+	}
+
+	// Fetch latest statuses for all rides in a single query
+	rideStatuses, err := getLatestRideStatuses(ctx, tx, rideIDs)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
 	}
 
 	nearbyChairs := []appGetNearbyChairsResponseChair{}
@@ -1020,9 +989,9 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 		if chairRides, exists := rideMap[chair.ID]; exists {
 			for _, ride := range chairRides {
 				// 過去にライドが存在し、かつ、それが完了していない場合はスキップ
-				status, err := getLatestRideStatus(ctx, tx, ride.ID)
-				if err != nil {
-					writeError(w, http.StatusInternalServerError, err)
+				status, exists := rideStatuses[ride.ID]
+				if !exists {
+					writeError(w, http.StatusInternalServerError, fmt.Errorf("status not found for ride ID: %s", ride.ID))
 					return
 				}
 				if status != "COMPLETED" {
@@ -1060,6 +1029,55 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 		Chairs:      nearbyChairs,
 		RetrievedAt: retrievedAt.UnixMilli(),
 	})
+}
+
+func getLatestRideStatuses(ctx context.Context, tx executableGet, rideIDs []string) (map[string]string, error) {
+	if len(rideIDs) == 0 {
+		return map[string]string{}, nil
+	}
+
+	query, args, err := sqlx.In(`
+		SELECT ride_id, status
+		FROM ride_statuses
+		WHERE ride_id IN (?)
+		AND created_at = (
+			SELECT MAX(created_at)
+			FROM ride_statuses AS rs
+			WHERE rs.ride_id = ride_statuses.ride_id
+		)
+	`, rideIDs)
+	if err != nil {
+		return nil, err
+	}
+	query = tx.Rebind(query)
+
+	rows, err := tx.QueryxContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	rideStatuses := make(map[string]string, len(rideIDs))
+	for rows.Next() {
+		var rideID, status string
+		if err := rows.Scan(&rideID, &status); err != nil {
+			return nil, err
+		}
+		rideStatuses[rideID] = status
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Ensure all rideIDs have a status
+	for _, rideID := range rideIDs {
+		if _, exists := rideStatuses[rideID]; !exists {
+			return nil, fmt.Errorf("latest status not found for ride ID: %s", rideID)
+		}
+	}
+
+	return rideStatuses, nil
 }
 
 func calculateFare(pickupLatitude, pickupLongitude, destLatitude, destLongitude int) int {
