@@ -82,6 +82,7 @@ HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0
 	var assignments []struct {
 		chairID string
 		rideID  string
+		userID  string
 	}
 
 	// chairsを可変なsliceとして扱えるようにする
@@ -113,9 +114,11 @@ HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0
 			assignments = append(assignments, struct {
 				chairID string
 				rideID  string
+				userID  string
 			}{
 				chairID: availableChairs[bestIdx].ID,
 				rideID:  ride.ID,
+				userID:  ride.UserID,
 			})
 
 			// 使用済みの椅子をリストから除去(末尾とスワップして削除する)
@@ -143,6 +146,9 @@ HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
+
+		notificationResponseCache.Forget(a.userID)
+		chairNotificationResponseCache.Forget(a.chairID)
 	}
 
 	if err := tx.Commit(); err != nil {
