@@ -154,6 +154,8 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+
+		rideStatusesCache.Forget(ride.ID)
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -310,6 +312,8 @@ func chairPostRideStatus(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
+
+		rideStatusesCache.Forget(ride.ID)
 	// After Picking up user
 	case "CARRYING":
 		status, err := getLatestRideStatus(ctx, tx, ride.ID)
@@ -325,6 +329,7 @@ func chairPostRideStatus(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
+		rideStatusesCache.Forget(ride.ID)
 	default:
 		writeError(w, http.StatusBadRequest, errors.New("invalid status"))
 	}

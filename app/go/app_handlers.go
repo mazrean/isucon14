@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	isucache "github.com/mazrean/isucon-go-tools/v2/cache"
+	"github.com/motoki317/sc"
 	"github.com/oklog/ulid/v2"
 )
 
@@ -297,12 +299,24 @@ type executableGet interface {
 	GetContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error
 }
 
-func getLatestRideStatus(ctx context.Context, tx executableGet, rideID string) (string, error) {
-	status := ""
-	if err := tx.GetContext(ctx, &status, `SELECT status FROM ride_statuses WHERE ride_id = ? ORDER BY created_at DESC LIMIT 1`, rideID); err != nil {
-		return "", err
+var rideStatusesCache *sc.Cache[string, string]
+
+func init() {
+	var err error
+	rideStatusesCache, err = isucache.New("rideStatusesCache", func(ctx context.Context, key string) (string, error) {
+		status := ""
+		if err := db.GetContext(ctx, &status, `SELECT status FROM ride_statuses WHERE ride_id = ? ORDER BY created_at DESC LIMIT 1`, key); err != nil {
+			return "", err
+		}
+		return status, nil
+	}, 5*time.Minute, 10*time.Minute, sc.WithMapBackend(1000))
+	if err != nil {
+		panic(fmt.Sprintf("failed to create rideStatusesCache: %v", err))
 	}
-	return status, nil
+}
+
+func getLatestRideStatus(ctx context.Context, tx executableGet, rideID string) (string, error) {
+	return rideStatusesCache.Get(ctx, rideID)
 }
 
 // New function to count ongoing rides with latest status not "COMPLETED"
@@ -451,6 +465,8 @@ func appPostRides(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+
+	rideStatusesCache.Forget(rideID)
 
 	if err := tx.Commit(); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
@@ -644,6 +660,8 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+
+	rideStatusesCache.Forget(rideID)
 
 	if err := tx.Commit(); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
