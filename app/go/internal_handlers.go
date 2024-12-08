@@ -118,6 +118,7 @@ HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0
 	}
 
 	for _, a := range assignments {
+		rideStatusesCache.Forget(a.rideID)
 		notificationResponseCache.Forget(a.userID)
 	}
 
