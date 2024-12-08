@@ -188,6 +188,49 @@ type getAppRidesResponseItemChair struct {
 	Model string `json:"model"`
 }
 
+func getLatestRideStatuses(ctx context.Context, tx executableGet, rideIDs []string) (map[string]string, error) {
+	if len(rideIDs) == 0 {
+		return nil, nil
+	}
+
+	query, args, err := sqlx.In(`
+		SELECT rs.ride_id, rs.status
+		FROM ride_statuses rs
+		INNER JOIN (
+			SELECT ride_id, MAX(created_at) AS max_created_at
+			FROM ride_statuses
+			WHERE ride_id IN (?)
+			GROUP BY ride_id
+		) latest_rs ON rs.ride_id = latest_rs.ride_id AND rs.created_at = latest_rs.max_created_at
+	`, rideIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	query = tx.Rebind(query)
+
+	rows, err := tx.QueryxContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	statuses := make(map[string]string, len(rideIDs))
+	for rows.Next() {
+		var rideID, status string
+		if err := rows.Scan(&rideID, &status); err != nil {
+			return nil, err
+		}
+		statuses[rideID] = status
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return statuses, nil
+}
+
 func appGetRides(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user := ctx.Value("user").(*User)
@@ -210,14 +253,23 @@ func appGetRides(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Collect all ride IDs
+	rideIDs := make([]string, len(rides))
+	for i, ride := range rides {
+		rideIDs[i] = ride.ID
+	}
+
+	// Fetch all latest statuses at once
+	statuses, err := getLatestRideStatuses(ctx, tx, rideIDs)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
 	items := []getAppRidesResponseItem{}
 	for _, ride := range rides {
-		status, err := getLatestRideStatus(ctx, tx, ride.ID)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-		if status != "COMPLETED" {
+		status, exists := statuses[ride.ID]
+		if !exists || status != "COMPLETED" {
 			continue
 		}
 
@@ -279,6 +331,8 @@ type appPostRidesResponse struct {
 }
 
 type executableGet interface {
+	Rebind(query string) string
+	QueryxContext(ctx context.Context, query string, args ...interface{}) (*sqlx.Rows, error)
 	Get(dest interface{}, query string, args ...interface{}) error
 	GetContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error
 }
