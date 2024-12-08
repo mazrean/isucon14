@@ -731,7 +731,7 @@ func init() {
 				CreatedAt:             ride.CreatedAt.UnixMilli(),
 				UpdateAt:              ride.UpdatedAt.UnixMilli(),
 			},
-			RetryAfterMs: 100,
+			RetryAfterMs: 20,
 		}
 
 		if ride.ChairID.Valid {
