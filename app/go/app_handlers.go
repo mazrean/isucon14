@@ -780,7 +780,7 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	status, err := getLatestRideStatus(ctx, db, response.res.Data.RideID)
+	response.res.Data.Status, err = getLatestRideStatus(ctx, db, response.res.Data.RideID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
