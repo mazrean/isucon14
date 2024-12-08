@@ -345,6 +345,28 @@ func getLatestRideStatus(ctx context.Context, tx executableGet, rideID string) (
 	return status, nil
 }
 
+// New function to count ongoing rides with latest status not "COMPLETED"
+func countOngoingRides(ctx context.Context, tx executableGet, userID string) (int, error) {
+	query := `
+		SELECT COUNT(*)
+		FROM rides r
+		JOIN ride_statuses rs ON r.id = rs.ride_id
+		WHERE r.user_id = ?
+		  AND rs.created_at = (
+				SELECT MAX(rs2.created_at)
+				FROM ride_statuses rs2
+				WHERE rs2.ride_id = r.id
+			)
+		  AND rs.status != 'COMPLETED'
+	`
+	var count int
+	if err := tx.GetContext(ctx, &count, query, userID); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+// Modified appPostRides function with reduced SQL executions
 func appPostRides(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	req := &appPostRidesRequest{}
@@ -367,25 +389,14 @@ func appPostRides(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	rides := []Ride{}
-	if err := tx.SelectContext(ctx, &rides, `SELECT * FROM rides WHERE user_id = ?`, user.ID); err != nil {
+	// Replace fetching all rides and iterating with a single count query
+	ongoingRideCount, err := countOngoingRides(ctx, tx, user.ID)
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 
-	continuingRideCount := 0
-	for _, ride := range rides {
-		status, err := getLatestRideStatus(ctx, tx, ride.ID)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-		if status != "COMPLETED" {
-			continuingRideCount++
-		}
-	}
-
-	if continuingRideCount > 0 {
+	if ongoingRideCount > 0 {
 		writeError(w, http.StatusConflict, errors.New("ride already exists"))
 		return
 	}
