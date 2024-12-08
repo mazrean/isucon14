@@ -785,7 +785,7 @@ func init() {
 			rideStatus: yetSentRideStatus,
 			res:        *response,
 		}, nil
-	}, 5*time.Minute, 10*time.Minute, sc.WithMapBackend(1000))
+	}, 2*time.Second, 2*time.Second, sc.WithMapBackend(1000))
 	if err != nil {
 		panic(fmt.Sprintf("failed to create notificationResponseCache: %v", err))
 	}
