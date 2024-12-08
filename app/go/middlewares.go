@@ -76,7 +76,7 @@ func ownerAuthMiddleware(next http.Handler) http.Handler {
 				return nil, err
 			}
 			return owner, nil
-		}, 5*time.Minute, 10*time.Minute, sc.WithMapBackend(1000))
+		}, 5*time.Minute, 10*time.Minute, sc.WithMapBackend(1000), sc.EnableStrictCoalescing())
 		if err != nil {
 			log.Fatalf("failed to create owner cache: %v", err)
 		}

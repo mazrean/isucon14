@@ -362,6 +362,7 @@ func chairPostRideStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	rideStatusesCache.Forget(ride.ID)
 	notificationResponseCache.Forget(ride.UserID)
+	rideStatusesCache.Forget(ride.ID)
 
 	log.Printf("chair %s updated ride %s status to %s", chair.ID, ride.ID, req.Status)
 

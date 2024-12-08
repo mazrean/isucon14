@@ -309,7 +309,7 @@ func init() {
 			return "", err
 		}
 		return status, nil
-	}, 2*time.Second, 2*time.Second, sc.WithMapBackend(1000))
+	}, 2*time.Second, 2*time.Second, sc.WithMapBackend(1000), sc.EnableStrictCoalescing())
 	if err != nil {
 		panic(fmt.Sprintf("failed to create rideStatusesCache: %v", err))
 	}
