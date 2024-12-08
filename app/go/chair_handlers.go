@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
@@ -362,8 +361,6 @@ func chairPostRideStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	rideStatusesCache.Forget(ride.ID)
 	notificationResponseCache.Forget(ride.UserID)
-
-	log.Printf("chair %s updated ride %s status to %s", chair.ID, ride.ID, req.Status)
 
 	w.WriteHeader(http.StatusNoContent)
 }
