@@ -359,6 +359,7 @@ func chairPostRideStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rideStatusesCache.Forget(ride.ID)
+	notificationResponseCache.Forget(ride.UserID)
 
 	w.WriteHeader(http.StatusNoContent)
 }
