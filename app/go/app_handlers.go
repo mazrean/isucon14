@@ -712,8 +712,7 @@ type appGetNotificationResponseChairStats struct {
 }
 
 type appGetNotificationResponseCache struct {
-	res        appGetNotificationResponse
-	rideStatus RideStatus
+	res appGetNotificationResponse
 }
 
 var notificationResponseCache *sc.Cache[string, *appGetNotificationResponseCache]
@@ -723,32 +722,6 @@ func init() {
 	notificationResponseCache, err = isucache.New("notificationResponseCache", func(ctx context.Context, key string) (*appGetNotificationResponseCache, error) {
 		ride := &Ride{}
 		if err := db.GetContext(ctx, ride, `SELECT * FROM rides WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`, key); err != nil {
-			return nil, err
-		}
-
-		yetSentRideStatus := RideStatus{}
-		if err := db.GetContext(ctx, &yetSentRideStatus, `SELECT * FROM ride_statuses WHERE ride_id = ? AND app_sent_at IS NULL ORDER BY created_at ASC LIMIT 1`, ride.ID); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				status, err := getLatestRideStatusNoCache(ctx, db, ride.ID)
-				if err != nil {
-					return nil, err
-				}
-				return &appGetNotificationResponseCache{
-					rideStatus: yetSentRideStatus,
-					res: appGetNotificationResponse{
-						Data: &appGetNotificationResponseData{
-							RideID:                ride.ID,
-							PickupCoordinate:      Coordinate{Latitude: ride.PickupLatitude, Longitude: ride.PickupLongitude},
-							DestinationCoordinate: Coordinate{Latitude: ride.DestinationLatitude, Longitude: ride.DestinationLongitude},
-							Fare:                  0,
-							Status:                status,
-							CreatedAt:             ride.CreatedAt.UnixMilli(),
-							UpdateAt:              ride.UpdatedAt.UnixMilli(),
-						},
-						RetryAfterMs: 30,
-					},
-				}, nil
-			}
 			return nil, err
 		}
 
@@ -763,7 +736,6 @@ func init() {
 				PickupCoordinate:      Coordinate{Latitude: ride.PickupLatitude, Longitude: ride.PickupLongitude},
 				DestinationCoordinate: Coordinate{Latitude: ride.DestinationLatitude, Longitude: ride.DestinationLongitude},
 				Fare:                  fare,
-				Status:                yetSentRideStatus.Status,
 				CreatedAt:             ride.CreatedAt.UnixMilli(),
 				UpdateAt:              ride.UpdatedAt.UnixMilli(),
 			},
@@ -790,8 +762,7 @@ func init() {
 		}
 
 		return &appGetNotificationResponseCache{
-			rideStatus: yetSentRideStatus,
-			res:        *response,
+			res: *response,
 		}, nil
 	}, 2*time.Second, 2*time.Second, sc.WithMapBackend(1000))
 	if err != nil {
@@ -809,13 +780,16 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if response.rideStatus.ID != "" {
-		response.rideStatus.ID = ""
-		_, err := db.ExecContext(ctx, `UPDATE ride_statuses SET app_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, response.rideStatus.ID)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
+	status, err := getLatestRideStatus(ctx, db, response.res.Data.RideID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET app_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ? AND app_sent_at IS NULL`, status.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
 	}
 
 	writeJSON(w, http.StatusOK, response.res)
