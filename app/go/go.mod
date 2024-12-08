@@ -6,7 +6,7 @@ require (
 	github.com/go-chi/chi/v5 v5.1.0
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/jmoiron/sqlx v1.4.0
-	github.com/mazrean/isucon-go-tools/v2 v2.2.7
+	github.com/mazrean/isucon-go-tools/v2 v2.2.8
 	github.com/oklog/ulid/v2 v2.1.0
 )
 
