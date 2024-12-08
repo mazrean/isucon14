@@ -764,7 +764,7 @@ func init() {
 		return &appGetNotificationResponseCache{
 			res: *response,
 		}, nil
-	}, 2*time.Second, 2*time.Second, sc.WithMapBackend(1000))
+	}, 2*time.Second, 0, sc.WithMapBackend(1000))
 	if err != nil {
 		panic(fmt.Sprintf("failed to create notificationResponseCache: %v", err))
 	}
@@ -780,7 +780,6 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rideStatusesCache.Forget(response.res.Data.RideID)
 	response.res.Data.Status, err = getLatestRideStatus(ctx, db, response.res.Data.RideID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
