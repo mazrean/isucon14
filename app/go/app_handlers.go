@@ -466,12 +466,12 @@ func appPostRides(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rideStatusesCache.Forget(rideID)
-
 	if err := tx.Commit(); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+
+	rideStatusesCache.Forget(rideID)
 
 	writeJSON(w, http.StatusAccepted, &appPostRidesResponse{
 		RideID: rideID,
@@ -661,12 +661,12 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rideStatusesCache.Forget(rideID)
-
 	if err := tx.Commit(); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+
+	rideStatusesCache.Forget(rideID)
 
 	writeJSON(w, http.StatusOK, &appPostRideEvaluationResponse{
 		CompletedAt: ride.UpdatedAt.UnixMilli(),
