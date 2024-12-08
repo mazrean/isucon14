@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
+	isucache "github.com/mazrean/isucon-go-tools/v2/cache"
+	"github.com/motoki317/sc"
 	"github.com/oklog/ulid/v2"
 )
 
@@ -209,68 +212,42 @@ type chairGetNotificationResponseData struct {
 	Status                string     `json:"status"`
 }
 
-func chairGetNotification(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	chair := ctx.Value("chair").(*Chair)
+var chairNotificationResponseCache *sc.Cache[string, *chairGetNotificationResponseData]
 
-	tx, err := db.Beginx()
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	defer tx.Rollback()
-	ride := &Ride{}
-	yetSentRideStatus := RideStatus{}
-	status := ""
+func init() {
+	var err error
+	chairNotificationResponseCache, err = isucache.New("notificationResponseCache", func(ctx context.Context, key string) (*chairGetNotificationResponseData, error) {
+		ride := &Ride{}
+		yetSentRideStatus := RideStatus{}
+		status := ""
 
-	if err := tx.GetContext(ctx, ride, `SELECT * FROM rides WHERE chair_id = ? ORDER BY updated_at DESC LIMIT 1`, chair.ID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			writeJSON(w, http.StatusOK, &chairGetNotificationResponse{
-				RetryAfterMs: 30,
-			})
-			return
+		if err := db.GetContext(ctx, ride, `SELECT * FROM rides WHERE chair_id = ? ORDER BY updated_at DESC LIMIT 1`, key); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, nil
+			}
+			return nil, err
 		}
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
 
-	if err := tx.GetContext(ctx, &yetSentRideStatus, `SELECT * FROM ride_statuses WHERE ride_id = ? AND chair_sent_at IS NULL ORDER BY created_at ASC LIMIT 1`, ride.ID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			status, err = getLatestRideStatus(ctx, tx, ride.ID)
-			if err != nil {
-				writeError(w, http.StatusInternalServerError, err)
-				return
+		if err := db.GetContext(ctx, &yetSentRideStatus, `SELECT * FROM ride_statuses WHERE ride_id = ? AND chair_sent_at IS NULL ORDER BY created_at ASC LIMIT 1`, ride.ID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				status, err = getLatestRideStatus(ctx, db, ride.ID)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				return nil, err
 			}
 		} else {
-			writeError(w, http.StatusInternalServerError, err)
-			return
+			status = yetSentRideStatus.Status
 		}
-	} else {
-		status = yetSentRideStatus.Status
-	}
 
-	user := &User{}
-	err = tx.GetContext(ctx, user, "SELECT * FROM users WHERE id = ? FOR SHARE", ride.UserID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-
-	if yetSentRideStatus.ID != "" {
-		_, err := tx.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, yetSentRideStatus.ID)
+		user := &User{}
+		err = db.GetContext(ctx, user, "SELECT * FROM users WHERE id = ? FOR SHARE", ride.UserID)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err)
-			return
+			return nil, err
 		}
-	}
 
-	if err := tx.Commit(); err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-
-	writeJSON(w, http.StatusOK, &chairGetNotificationResponse{
-		Data: &chairGetNotificationResponseData{
+		return &chairGetNotificationResponseData{
 			RideID: ride.ID,
 			User: simpleUser{
 				ID:   user.ID,
@@ -285,8 +262,32 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 				Longitude: ride.DestinationLongitude,
 			},
 			Status: status,
-		},
-		RetryAfterMs: 30,
+		}, nil
+	}, 0, 2*time.Second, sc.WithMapBackend(1000))
+	if err != nil {
+		panic(fmt.Sprintf("failed to create notificationResponseCache: %v", err))
+	}
+}
+
+func chairGetNotification(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	chair := ctx.Value("chair").(*Chair)
+
+	data, err := chairNotificationResponseCache.Get(ctx, chair.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE ride_id = ? AND chair_sent_at IS NULL ORDER BY created_at DESC LIMIT 1`, data.RideID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, &chairGetNotificationResponse{
+		Data:         data,
+		RetryAfterMs: 100,
 	})
 }
 
