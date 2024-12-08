@@ -944,7 +944,7 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 	err = tx.GetContext(
 		ctx,
 		retrievedAt,
-		`SELECT CURRENT_TIMESTAMP(6)`,
+		`/**/ SELECT CURRENT_TIMESTAMP(6)`,
 	)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)

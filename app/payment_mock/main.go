@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+
 	_ "github.com/mazrean/isucon-go-tools/v2"
 	isuhttp "github.com/mazrean/isucon-go-tools/v2/http"
 )
@@ -18,8 +19,7 @@ var (
 
 func main() {
 	mux := http.NewServeMux()
-	isuhttp.ServeMuxHandleFunc(mux, "POST /payments", handlePostPayment
-	isuhttp.ServeMuxHandleFunc(mux, "POST /payments", handlePostPayments)
+	isuhttp.ServerMuxHandleFunc(mux, "POST /payments", handlePostPayments)
 	http.ListenAndServe(":12345", mux)
 }
 
