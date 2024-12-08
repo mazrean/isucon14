@@ -73,6 +73,7 @@ HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0
 	var assignments []struct {
 		chairID string
 		rideID  string
+		userID  string
 	}
 
 	for i, ride := range rides {
@@ -82,9 +83,11 @@ HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0
 		assignments = append(assignments, struct {
 			chairID string
 			rideID  string
+			userID  string
 		}{
 			chairID: chairs[i].ID,
 			rideID:  ride.ID,
+			userID:  ride.UserID,
 		})
 	}
 
@@ -112,6 +115,10 @@ HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0
 	if err := tx.Commit(); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
+	}
+
+	for _, a := range assignments {
+		notificationResponseCache.Forget(a.userID)
 	}
 
 	w.WriteHeader(http.StatusNoContent)

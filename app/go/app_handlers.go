@@ -472,6 +472,7 @@ func appPostRides(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rideStatusesCache.Forget(rideID)
+	notificationResponseCache.Forget(ride.UserID)
 
 	writeJSON(w, http.StatusAccepted, &appPostRidesResponse{
 		RideID: rideID,
@@ -667,6 +668,7 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rideStatusesCache.Forget(rideID)
+	notificationResponseCache.Forget(ride.UserID)
 
 	writeJSON(w, http.StatusOK, &appPostRideEvaluationResponse{
 		CompletedAt: ride.UpdatedAt.UnixMilli(),
