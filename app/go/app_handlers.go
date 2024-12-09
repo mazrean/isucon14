@@ -851,6 +851,7 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 				writeError(w, r, http.StatusInternalServerError, fmt.Errorf("failed to encode response2(%+v): %w", response.Chair, err))
 				return
 			}
+			slog.Info(sb.String())
 			fmt.Fprintf(w, "data: %s\n\n", sb.String())
 			flusher.Flush()
 
