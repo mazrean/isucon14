@@ -1054,8 +1054,7 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 	for _, ride := range rides {
 		rideMap[ride.ChairID.String] = append(rideMap[ride.ChairID.String], ride)
 	}
-
-	nearbyChairs := []appGetNearbyChairsResponseChair{}
+	compoletedChairs := []*Chair{}
 	for _, chair := range chairs {
 		// Check rides for this chair
 		skip := false
@@ -1077,6 +1076,12 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		compoletedChairs = append(compoletedChairs, &chair)
+
+	}
+
+	nearbyChairs := []appGetNearbyChairsResponseChair{}
+	for _, chair := range compoletedChairs {
 		// Get the latest ChairLocation
 		chairLocation, exists := chairLocationCache.Load(chair.ID)
 		if !exists {
