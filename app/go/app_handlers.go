@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -813,29 +812,28 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 
+				evaluationAve := 0.0
+				if stats.TotalRidesCount > 0 {
+					evaluationAve = float64(stats.TotalEvaluation) / float64(stats.TotalRidesCount)
+				}
+
 				response.Chair = &appGetNotificationResponseChair{
 					ID:    chair.ID,
 					Name:  chair.Name,
 					Model: chair.Model,
 					Stats: appGetNotificationResponseChairStats{
 						TotalRidesCount:    stats.TotalRidesCount,
-						TotalEvaluationAvg: float64(stats.TotalEvaluation) / float64(stats.TotalRidesCount),
+						TotalEvaluationAvg: evaluationAve,
 					},
 				}
 			case "COMPLETED":
 				response.Status = event.status
-				stats.TotalRidesCount += 1
+				stats.TotalRidesCount++
 				stats.TotalEvaluation += event.evaluation
 
-				evaluationAve := 0.0
-				if stats.TotalRidesCount > 0 {
-					evaluationAve = float64(stats.TotalEvaluation) / float64(stats.TotalRidesCount)
-				}
-
-				slog.Info("completed", "totalRidesCount", stats.TotalRidesCount, "totalEvaluation", stats.TotalEvaluation, "evaluationAve", evaluationAve)
 				response.Chair.Stats = appGetNotificationResponseChairStats{
 					TotalRidesCount:    stats.TotalRidesCount,
-					TotalEvaluationAvg: evaluationAve,
+					TotalEvaluationAvg: float64(stats.TotalEvaluation) / float64(stats.TotalRidesCount),
 				}
 				response.UpdateAt = event.updatedAt.UnixMilli()
 			}
