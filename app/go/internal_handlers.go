@@ -122,19 +122,6 @@ HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0
 		return
 	}
 
-	// マンハッタン距離計算用関数
-	manhattanDistance := func(x1, y1, x2, y2 int) int {
-		dx := x1 - x2
-		if dx < 0 {
-			dx = -dx
-		}
-		dy := y1 - y2
-		if dy < 0 {
-			dy = -dy
-		}
-		return dx + dy
-	}
-
 	// 3. メモリ上でマンハッタン距離が最短になる椅子を割り当てる
 	// 注意: rides数とchairs数が大きい場合、ここはO(N*M)になる
 	var assignments []struct {
@@ -160,8 +147,8 @@ HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0
 				continue
 			}
 
-			length := manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, location.LastLatitude, location.LastLongitude) + manhattanDistance(ride.DestinationLatitude, ride.DestinationLongitude, ride.PickupLatitude, ride.PickupLongitude)
-			dist := float64(length)*0.1 + float64(length)/float64(chairModelSpeedCache[ch.Model])
+			length := distance(ride.PickupLatitude, ride.PickupLongitude, location.LastLatitude, location.LastLongitude) + distance(ride.DestinationLatitude, ride.DestinationLongitude, ride.PickupLatitude, ride.PickupLongitude)
+			dist := float64(length) / float64(chairModelSpeedCache[ch.Model])
 			if dist < bestDist {
 				bestDist = dist
 				bestIdx = i
