@@ -164,6 +164,11 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if err := tx.Commit(); err != nil {
+		writeError(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
 	chairLocationCache.Update(chair.ID, func(cl *chairLocation) (*chairLocation, bool) {
 		if cl == nil {
 			return &chairLocation{
@@ -180,11 +185,6 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 			TotalDistanceUpdatedAt: time.Now(),
 		}, true
 	})
-
-	if err := tx.Commit(); err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
-		return
-	}
 
 	rideStatusesCache.Forget(ride.ID)
 	if newStatus != "" {
