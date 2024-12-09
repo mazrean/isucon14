@@ -122,11 +122,12 @@ func appPostUsers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	accessTokenCache.Forget(accessToken)
 	if err := tx.Commit(); err != nil {
 		writeError(w, r, http.StatusInternalServerError, err)
 		return
 	}
+
+	accessTokenCache.Forget(accessToken)
 	ownerCache.Forget(accessToken)
 
 	http.SetCookie(w, &http.Cookie{
