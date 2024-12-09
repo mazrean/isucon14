@@ -786,7 +786,7 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusInternalServerError, fmt.Errorf("failed to encode response1(%+v): %w", response.Chair, err))
 		return
 	}
-	fmt.Fprintf(w, "data: %s\n", sb.String())
+	fmt.Fprintf(w, "data: %s\n\n", sb.String())
 	flusher.Flush()
 
 	_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET app_sent_at = CURRENT_TIMESTAMP(6) WHERE ride_id = ? AND app_sent_at IS NULL ORDER BY created_at DESC LIMIT 1`, response.RideID)
@@ -851,7 +851,7 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 				writeError(w, r, http.StatusInternalServerError, fmt.Errorf("failed to encode response2(%+v): %w", response.Chair, err))
 				return
 			}
-			fmt.Fprintf(w, "data: %s\n", sb.String())
+			fmt.Fprintf(w, "data: %s\n\n", sb.String())
 			flusher.Flush()
 
 			_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET app_sent_at = CURRENT_TIMESTAMP(6) WHERE ride_id = ? AND app_sent_at IS NULL ORDER BY created_at DESC LIMIT 1`, response.RideID)
