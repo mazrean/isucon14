@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -775,12 +776,6 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET app_sent_at = CURRENT_TIMESTAMP(6) WHERE ride_id = ? AND app_sent_at IS NULL ORDER BY created_at DESC LIMIT 1`, response.RideID)
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
-		return
-	}
-
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -794,6 +789,12 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "data: %s\n", sb.String())
 	flusher.Flush()
 
+	_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET app_sent_at = CURRENT_TIMESTAMP(6) WHERE ride_id = ? AND app_sent_at IS NULL ORDER BY created_at DESC LIMIT 1`, response.RideID)
+	if err != nil {
+		writeError(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
 	ch := make(chan *RideEvent, 100)
 	Subscribe(ride.ID, ch)
 	for {
@@ -801,6 +802,12 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 		case <-ctx.Done():
 			return
 		case event := <-ch:
+			slog.InfoContext(ctx, "event",
+				slog.String("status", event.status),
+				slog.String("ride_id", ride.ID),
+				slog.Int("evaluation", event.evaluation),
+				slog.Time("updated_at", event.updatedAt),
+			)
 			switch event.status {
 			case "MATCHING", "ENROUTE", "PICKUP", "CARRYING", "ARRIVED":
 				response.Status = event.status
