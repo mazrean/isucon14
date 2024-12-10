@@ -93,10 +93,21 @@ func chairPostActivity(w http.ResponseWriter, r *http.Request) {
 
 	func() {
 		if req.IsActive {
-			emptyChairsLocker.Lock()
-			defer emptyChairsLocker.Unlock()
+			var status string
+			if err := db.GetContext(ctx, &status, "SELECT status FROM rides JOIN ride_statuses ON rides.id = ride_statuses.ride_id WHERE chair_id = ? ORDER BY ride_statuses.created_at DESC LIMIT 1", chair.ID); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					status = "COMPLETED"
+				}
+				writeError(w, r, http.StatusInternalServerError, err)
+				return
+			}
 
-			emptyChairs = append(emptyChairs, chair)
+			if status == "COMPLETED" {
+				emptyChairsLocker.Lock()
+				defer emptyChairsLocker.Unlock()
+
+				emptyChairs = append(emptyChairs, chair)
+			}
 		} else {
 			emptyChairsLocker.Lock()
 			defer emptyChairsLocker.Unlock()
