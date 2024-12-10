@@ -93,17 +93,21 @@ func chairPostActivity(w http.ResponseWriter, r *http.Request) {
 
 	func() {
 		if req.IsActive {
-			var status string
-			if err := db.GetContext(ctx, &status, "SELECT status FROM rides JOIN ride_statuses ON rides.id = ride_statuses.ride_id WHERE chair_id = ? ORDER BY ride_statuses.created_at DESC LIMIT 1", chair.ID); err != nil {
+			var status struct {
+				Status string `db:"status"`
+				IsSend bool   `db:"is_send"`
+			}
+			if err := db.GetContext(ctx, &status, "SELECT status, (chair_sent_at IS NOT NULL) as is_send FROM rides JOIN ride_statuses ON rides.id = ride_statuses.ride_id WHERE chair_id = ? ORDER BY ride_statuses.created_at DESC LIMIT 1", chair.ID); err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
-					status = "COMPLETED"
+					status.Status = "COMPLETED"
+					status.IsSend = true
 				} else {
 					writeError(w, r, http.StatusInternalServerError, err)
 					return
 				}
 			}
 
-			if status == "COMPLETED" {
+			if status.IsSend && status.Status == "COMPLETED" {
 				emptyChairsLocker.Lock()
 				defer emptyChairsLocker.Unlock()
 
@@ -405,7 +409,7 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			if response.Status == "COMPLETED" {
+			if status.Status == "COMPLETED" {
 				go func() {
 					emptyChairsLocker.Lock()
 					defer emptyChairsLocker.Unlock()
