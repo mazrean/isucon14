@@ -1101,7 +1101,10 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 	}
-	logItems := []any{}
+	logItems := []any{
+		slog.Int("lat", lat),
+		slog.Int("lon", lon),
+	}
 	for i, chair := range nearbyChairs {
 		logItems = append(logItems,
 			slog.Group(strconv.Itoa(i),
