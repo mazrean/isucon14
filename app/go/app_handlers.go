@@ -1091,7 +1091,6 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 	nearbyChairs := []appGetNearbyChairsResponseChair{}
 	for _, chair := range chairs {
 		// Check rides for this chair
-		skip := false
 		if ride, exists := latestRideCache.Load(chair.ID); exists {
 			// 過去にライドが存在し、かつ、それが完了していない場合はスキップ
 			status, exists := rideStatusesCache.Load(ride.ID)
@@ -1100,12 +1099,8 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if status.Status != "COMPLETED" {
-				skip = true
-				break
+				continue
 			}
-		}
-		if skip {
-			continue
 		}
 
 		// Get the latest ChairLocation
