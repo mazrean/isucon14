@@ -835,7 +835,7 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ch := make(chan *RideEvent, 100)
-	UserSubscribe(response.Chair.ID, ch)
+	UserSubscribe(user.ID, ch)
 	for {
 		select {
 		case <-ctx.Done():
@@ -919,7 +919,7 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 			}
 			fmt.Fprintf(w, "data: %s\n", sb.String())
 			flusher.Flush()
-			slog.Info("Sent notification to app1",
+			slog.Info("Sent notification to app2",
 				slog.String("ride_id", response.RideID),
 				slog.String("chair_id", response.Chair.ID),
 				slog.String("user_id", user.ID),
