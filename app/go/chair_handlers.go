@@ -251,10 +251,19 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rideStatus, err := getLatestRideStatus(ctx, tx, ride.ID)
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
-		return
+	if err := tx.GetContext(ctx, &yetSentRideStatus, `SELECT * FROM ride_statuses WHERE ride_id = ? AND chair_sent_at IS NULL ORDER BY created_at ASC LIMIT 1`, ride.ID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			status, err = getLatestRideStatus(ctx, tx, ride.ID)
+			if err != nil {
+				writeError(w, r, http.StatusInternalServerError, err)
+				return
+			}
+		} else {
+			writeError(w, r, http.StatusInternalServerError, err)
+			return
+		}
+	} else {
+		status = yetSentRideStatus.Status
 	}
 
 	user := &User{}
@@ -281,10 +290,12 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 		Status: status,
 	}
 
-	_, err = tx.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE ride_id = ? AND chair_sent_at IS NULL ORDER BY created_at DESC LIMIT 1`, ride.ID)
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
-		return
+	if yetSentRideStatus.ID != "" {
+		_, err := tx.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, yetSentRideStatus.ID)
+		if err != nil {
+			writeError(w, r, http.StatusInternalServerError, err)
+			return
+		}
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -327,12 +338,6 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 			}
 			fmt.Fprintf(w, "data: %s\n", sb.String())
 			flusher.Flush()
-
-			_, err = tx.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE ride_id = ? AND chair_sent_at IS NULL ORDER BY created_at DESC LIMIT 1`, ride.ID)
-			if err != nil {
-				writeError(w, r, http.StatusInternalServerError, err)
-				return
-			}
 
 			if event.status == "COMPLETED" {
 				return
