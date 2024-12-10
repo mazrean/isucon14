@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -106,13 +105,13 @@ type chairLocation struct {
 }
 
 func encodeChairLocation(location *chairLocation) []byte {
-	buf := bytes.NewBuffer(nil)
-	binary.LittleEndian.PutUint64(buf.Next(8), uint64(location.TotalDistance))
-	binary.LittleEndian.PutUint64(buf.Next(8), uint64(location.LastLatitude))
-	binary.LittleEndian.PutUint64(buf.Next(8), uint64(location.LastLongitude))
-	binary.LittleEndian.PutUint64(buf.Next(8), uint64(location.TotalDistanceUpdatedAt))
+	data := make([]byte, 32)
+	binary.LittleEndian.PutUint64(data[:8], uint64(location.TotalDistance))
+	binary.LittleEndian.PutUint64(data[8:16], uint64(location.LastLatitude))
+	binary.LittleEndian.PutUint64(data[16:24], uint64(location.LastLongitude))
+	binary.LittleEndian.PutUint64(data[24:32], uint64(location.TotalDistanceUpdatedAt))
 
-	return buf.Bytes()
+	return data
 }
 
 func decodeChairLocation(data []byte) chairLocation {
