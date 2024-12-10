@@ -79,7 +79,10 @@ func main() {
 
 	if err := initEmptyChairs(); err != nil {
 		panic(err)
-		return
+	}
+
+	if err := initRideStatusesCache(); err != nil {
+		panic(err)
 	}
 
 	isuhttp.ListenAndServe(":8080", mux)
@@ -255,6 +258,11 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 	initEventBus()
 
 	if err := initEmptyChairs(); err != nil {
+		writeError(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	if err := initRideStatusesCache(); err != nil {
 		writeError(w, r, http.StatusInternalServerError, err)
 		return
 	}

@@ -172,7 +172,7 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newStatus := ""
+	var newStatus *RideStatus
 	ride := &Ride{}
 	if err := tx.GetContext(ctx, ride, `SELECT * FROM rides WHERE chair_id = ? ORDER BY updated_at DESC LIMIT 1`, chair.ID); err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
@@ -187,21 +187,29 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 		}
 		if status != "COMPLETED" && status != "CANCELED" {
 			if req.Latitude == ride.PickupLatitude && req.Longitude == ride.PickupLongitude && status == "ENROUTE" {
-				if _, err := tx.ExecContext(ctx, "INSERT INTO ride_statuses (id, ride_id, status) VALUES (?, ?, ?)", ulid.Make().String(), ride.ID, "PICKUP"); err != nil {
+				statusID := ulid.Make().String()
+				if _, err := tx.ExecContext(ctx, "INSERT INTO ride_statuses (id, ride_id, status) VALUES (?, ?, ?)", statusID, ride.ID, "PICKUP"); err != nil {
 					writeError(w, r, http.StatusInternalServerError, err)
 					return
 				}
 
-				newStatus = "PICKUP"
+				newStatus = &RideStatus{
+					ID:     statusID,
+					Status: "PICKUP",
+				}
 			}
 
 			if req.Latitude == ride.DestinationLatitude && req.Longitude == ride.DestinationLongitude && status == "CARRYING" {
-				if _, err := tx.ExecContext(ctx, "INSERT INTO ride_statuses (id, ride_id, status) VALUES (?, ?, ?)", ulid.Make().String(), ride.ID, "ARRIVED"); err != nil {
+				statusID := ulid.Make().String()
+				if _, err := tx.ExecContext(ctx, "INSERT INTO ride_statuses (id, ride_id, status) VALUES (?, ?, ?)", statusID, ride.ID, "ARRIVED"); err != nil {
 					writeError(w, r, http.StatusInternalServerError, err)
 					return
 				}
 
-				newStatus = "ARRIVED"
+				newStatus = &RideStatus{
+					ID:     statusID,
+					Status: "ARRIVED",
+				}
 			}
 		}
 	}
@@ -228,14 +236,14 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rideStatusesCache.Forget(ride.ID)
-	if newStatus != "" {
+	if newStatus != nil {
+		rideStatusesCache.Store(ride.ID, newStatus)
 		ChairPublish(chair.ID, &RideEvent{
-			status: newStatus,
+			status: newStatus.Status,
 			rideID: ride.ID,
 		})
 		UserPublish(ride.UserID, &RideEvent{
-			status: newStatus,
+			status: newStatus.Status,
 			rideID: ride.ID,
 		})
 	}
@@ -467,10 +475,11 @@ func chairPostRideStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	statusID := ulid.Make().String()
 	switch req.Status {
 	// Acknowledge the ride
 	case "ENROUTE":
-		if _, err := tx.ExecContext(ctx, "INSERT INTO ride_statuses (id, ride_id, status) VALUES (?, ?, ?)", ulid.Make().String(), ride.ID, "ENROUTE"); err != nil {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO ride_statuses (id, ride_id, status) VALUES (?, ?, ?)", statusID, ride.ID, "ENROUTE"); err != nil {
 			writeError(w, r, http.StatusInternalServerError, err)
 			return
 		}
@@ -486,7 +495,7 @@ func chairPostRideStatus(w http.ResponseWriter, r *http.Request) {
 			writeError(w, r, http.StatusBadRequest, errors.New("chair has not arrived yet"))
 			return
 		}
-		if _, err := tx.ExecContext(ctx, "INSERT INTO ride_statuses (id, ride_id, status) VALUES (?, ?, ?)", ulid.Make().String(), ride.ID, "CARRYING"); err != nil {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO ride_statuses (id, ride_id, status) VALUES (?, ?, ?)", statusID, ride.ID, "CARRYING"); err != nil {
 			writeError(w, r, http.StatusInternalServerError, err)
 			return
 		}
@@ -498,7 +507,11 @@ func chairPostRideStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusInternalServerError, err)
 		return
 	}
-	rideStatusesCache.Forget(ride.ID)
+
+	rideStatusesCache.Store(ride.ID, &RideStatus{
+		ID:     statusID,
+		Status: req.Status,
+	})
 
 	ChairPublish(chair.ID, &RideEvent{
 		status: req.Status,

@@ -13,7 +13,6 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	isucache "github.com/mazrean/isucon-go-tools/v2/cache"
-	"github.com/motoki317/sc"
 	"github.com/oklog/ulid/v2"
 )
 
@@ -292,33 +291,37 @@ type executableGet interface {
 	GetContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error
 }
 
-var rideStatusesCache *sc.Cache[string, *RideStatus]
+var rideStatusesCache = isucache.NewAtomicMap[string, *RideStatus]("rideStatusesCache")
 
-func init() {
-	var err error
-	rideStatusesCache, err = isucache.New("rideStatusesCache", func(ctx context.Context, key string) (*RideStatus, error) {
-		status := RideStatus{}
-		if err := db.GetContext(ctx, &status, `SELECT id, status FROM ride_statuses WHERE ride_id = ? ORDER BY created_at DESC LIMIT 1`, key); err != nil {
-			return nil, err
-		}
-		return &status, nil
-	}, 2*time.Second, 2*time.Second, sc.WithMapBackend(1000), sc.EnableStrictCoalescing())
-	if err != nil {
-		panic(fmt.Sprintf("failed to create rideStatusesCache: %v", err))
+func initRideStatusesCache() error {
+	var rideStatuses []RideStatus
+	if err := db.Select(&rideStatuses, "SELECT * FROM ride_statuses WHERE created_at = (SELECT MAX(created_at) FROM ride_statuses WHERE ride_id = ride_statuses.ride_id)"); err != nil {
+		return err
 	}
+
+	for _, rideStatus := range rideStatuses {
+		rideStatusesCache.Store(rideStatus.RideID, &rideStatus)
+	}
+
+	return nil
 }
 
 func getLatestRideStatus(ctx context.Context, tx executableGet, rideID string) (string, error) {
-	rideStatus, err := rideStatusesCache.Get(ctx, rideID)
-	if err != nil {
-		return "", err
+	rideStatus, ok := rideStatusesCache.Load(rideID)
+	if !ok {
+		return "", sql.ErrNoRows
 	}
 
 	return rideStatus.Status, nil
 }
 
 func getLatestRideStatusWithID(ctx context.Context, tx executableGet, rideID string) (*RideStatus, error) {
-	return rideStatusesCache.Get(ctx, rideID)
+	rideStatus, ok := rideStatusesCache.Load(rideID)
+	if !ok {
+		return nil, sql.ErrNoRows
+	}
+
+	return rideStatus, nil
 }
 
 // New function to count ongoing rides with latest status not "COMPLETED"
@@ -614,10 +617,11 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	statusID := ulid.Make().String()
 	_, err = tx.ExecContext(
 		ctx,
 		`INSERT INTO ride_statuses (id, ride_id, status) VALUES (?, ?, ?)`,
-		ulid.Make().String(), rideID, "COMPLETED")
+		statusID, rideID, "COMPLETED")
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, err)
 		return
@@ -677,7 +681,11 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rideStatusesCache.Forget(rideID)
+	rideStatusesCache.Store(rideID, &RideStatus{
+		ID:     statusID,
+		RideID: rideID,
+		Status: "COMPLETED",
+	})
 
 	ChairPublish(ride.ChairID.String, &RideEvent{
 		status:     "COMPLETED",
