@@ -213,17 +213,10 @@ func appGetRides(w http.ResponseWriter, r *http.Request) {
 		rideIDs[i] = ride.ID
 	}
 
-	// Fetch all latest statuses at once
-	statuses, err := getLatestRideStatuses(ctx, tx, rideIDs)
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
-		return
-	}
-
 	items := []getAppRidesResponseItem{}
 	for _, ride := range rides {
-		status, exists := statuses[ride.ID]
-		if !exists || status != "COMPLETED" {
+		status, exists := rideStatusesCache.Load(ride.ID)
+		if !exists || status.Status != "COMPLETED" {
 			continue
 		}
 
@@ -705,11 +698,6 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-type appGetNotificationResponse struct {
-	Data         *appGetNotificationResponseData `json:"data"`
-	RetryAfterMs int                             `json:"retry_after_ms"`
-}
-
 type appGetNotificationResponseData struct {
 	RideID                string                           `json:"ride_id"`
 	PickupCoordinate      Coordinate                       `json:"pickup_coordinate"`
@@ -1111,17 +1099,8 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 
 	// Group rides by chair_id
 	rideMap := make(map[string][]*Ride)
-	rideIDs := make([]string, 0, len(rides))
 	for _, ride := range rides {
 		rideMap[ride.ChairID.String] = append(rideMap[ride.ChairID.String], ride)
-		rideIDs = append(rideIDs, ride.ID)
-	}
-
-	// Fetch latest statuses for all rides in a single query
-	rideStatuses, err := getLatestRideStatuses(ctx, tx, rideIDs)
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
-		return
 	}
 
 	nearbyChairs := []appGetNearbyChairsResponseChair{}
@@ -1131,12 +1110,12 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 		if chairRides, exists := rideMap[chair.ID]; exists {
 			for _, ride := range chairRides {
 				// 過去にライドが存在し、かつ、それが完了していない場合はスキップ
-				status, exists := rideStatuses[ride.ID]
+				status, exists := rideStatusesCache.Load(ride.ID)
 				if !exists {
 					writeError(w, r, http.StatusInternalServerError, fmt.Errorf("status not found for ride ID: %s", ride.ID))
 					return
 				}
-				if status != "COMPLETED" {
+				if status.Status != "COMPLETED" {
 					skip = true
 					break
 				}
@@ -1171,19 +1150,6 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 		Chairs:      nearbyChairs,
 		RetrievedAt: retrievedAt.UnixMilli(),
 	})
-}
-
-func getLatestRideStatuses(ctx context.Context, tx executableGet, rideIDs []string) (map[string]string, error) {
-	rideStatuses := make(map[string]string, len(rideIDs))
-	for _, rideID := range rideIDs {
-		var err error
-		rideStatuses[rideID], err = getLatestRideStatus(ctx, tx, rideID)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return rideStatuses, nil
 }
 
 func calculateFare(pickupLatitude, pickupLongitude, destLatitude, destLongitude int) int {
