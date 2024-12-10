@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -740,12 +739,6 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 		UpdateAt:              ride.UpdatedAt.UnixMilli(),
 	}
 
-	response.Status, err = getLatestRideStatus(ctx, db, response.RideID)
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
-		return
-	}
-
 	var stats appGetNotificationChairStats
 	if ride.ChairID.Valid {
 		chair := &Chair{}
@@ -774,12 +767,6 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 				TotalEvaluationAvg: evaluationAve,
 			},
 		}
-	}
-
-	_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET app_sent_at = CURRENT_TIMESTAMP(6) WHERE ride_id = ? AND app_sent_at IS NULL ORDER BY created_at DESC LIMIT 1`, response.RideID)
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
-		return
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -824,18 +811,11 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 				}
 			case "COMPLETED":
 				response.Status = event.status
-				stats.TotalRidesCount += 1
+				stats.TotalRidesCount++
 				stats.TotalEvaluation += event.evaluation
-
-				evaluationAve := 0.0
-				if stats.TotalRidesCount > 0 {
-					evaluationAve = float64(stats.TotalEvaluation) / float64(stats.TotalRidesCount)
-				}
-
-				slog.Info("completed", "totalRidesCount", stats.TotalRidesCount, "totalEvaluation", stats.TotalEvaluation, "evaluationAve", evaluationAve)
 				response.Chair.Stats = appGetNotificationResponseChairStats{
 					TotalRidesCount:    stats.TotalRidesCount,
-					TotalEvaluationAvg: evaluationAve,
+					TotalEvaluationAvg: float64(stats.TotalEvaluation) / float64(stats.TotalRidesCount),
 				}
 				response.UpdateAt = event.updatedAt.UnixMilli()
 			}
@@ -848,12 +828,6 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 			}
 			fmt.Fprintf(w, "data: %s\n", sb.String())
 			flusher.Flush()
-
-			_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET app_sent_at = CURRENT_TIMESTAMP(6) WHERE ride_id = ? AND app_sent_at IS NULL ORDER BY created_at DESC LIMIT 1`, response.RideID)
-			if err != nil {
-				writeError(w, r, http.StatusInternalServerError, err)
-				return
-			}
 
 			if event.status == "COMPLETED" {
 				return
