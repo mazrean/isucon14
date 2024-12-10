@@ -19,6 +19,7 @@ import (
 	isutools "github.com/mazrean/isucon-go-tools/v2"
 	isudb "github.com/mazrean/isucon-go-tools/v2/db"
 	isuhttp "github.com/mazrean/isucon-go-tools/v2/http"
+	isuqueue "github.com/mazrean/isucon-go-tools/v2/queue"
 )
 
 var db *sqlx.DB
@@ -147,6 +148,7 @@ type postInitializeResponse struct {
 
 func postInitialize(w http.ResponseWriter, r *http.Request) {
 	isutools.BeforeInitialize()
+	isuqueue.AllReset()
 	defer isutools.AfterInitialize()
 
 	ctx := r.Context()
