@@ -1202,48 +1202,12 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 }
 
 func getLatestRideStatuses(ctx context.Context, tx executableGet, rideIDs []string) (map[string]string, error) {
-	if len(rideIDs) == 0 {
-		return map[string]string{}, nil
-	}
-
-	query, args, err := sqlx.In(`
-		SELECT ride_id, status
-		FROM ride_statuses
-		WHERE ride_id IN (?)
-		AND created_at = (
-			SELECT MAX(created_at)
-			FROM ride_statuses AS rs
-			WHERE rs.ride_id = ride_statuses.ride_id
-		)
-	`, rideIDs)
-	if err != nil {
-		return nil, err
-	}
-	query = tx.Rebind(query)
-
-	rows, err := tx.QueryxContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
 	rideStatuses := make(map[string]string, len(rideIDs))
-	for rows.Next() {
-		var rideID, status string
-		if err := rows.Scan(&rideID, &status); err != nil {
-			return nil, err
-		}
-		rideStatuses[rideID] = status
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	// Ensure all rideIDs have a status
 	for _, rideID := range rideIDs {
-		if _, exists := rideStatuses[rideID]; !exists {
-			return nil, fmt.Errorf("latest status not found for ride ID: %s", rideID)
+		var err error
+		rideStatuses[rideID], err = getLatestRideStatus(ctx, tx, rideID)
+		if err != nil {
+			return nil, err
 		}
 	}
 
