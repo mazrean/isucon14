@@ -324,7 +324,7 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 			}
 			fmt.Fprintf(w, "data: %s\n", sb.String())
 			flusher.Flush()
-			slog.Info("Sent notification to chair1",
+			slog.Info("Sent notification to chair2",
 				slog.String("ride_id", response.RideID),
 				slog.String("chair_id", chair.ID),
 				slog.String("user_id", response.User.ID),
