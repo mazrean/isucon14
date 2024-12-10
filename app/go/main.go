@@ -247,8 +247,6 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	initEventBus()
-
 	writeJSON(w, http.StatusOK, postInitializeResponse{Language: "go"})
 }
 
@@ -283,9 +281,7 @@ func writeError(w http.ResponseWriter, statusCode int, err error) {
 	}
 	w.Write(buf)
 
-	slog.Error("error response wrote",
-		slog.String("error", err.Error()),
-	)
+	slog.Error("error response wrote", err)
 }
 
 func secureRandomStr(b int) string {

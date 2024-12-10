@@ -138,9 +138,9 @@ HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0
 	// 3. メモリ上でマンハッタン距離が最短になる椅子を割り当てる
 	// 注意: rides数とchairs数が大きい場合、ここはO(N*M)になる
 	var assignments []struct {
-		chair  *Chair
-		rideID string
-		userID string
+		chairID string
+		rideID  string
+		userID  string
 	}
 
 	// chairsを可変なsliceとして扱えるようにする
@@ -171,13 +171,13 @@ HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0
 		// 最適な椅子が見つかったら割り当て
 		if bestIdx >= 0 {
 			assignments = append(assignments, struct {
-				chair  *Chair
-				rideID string
-				userID string
+				chairID string
+				rideID  string
+				userID  string
 			}{
-				chair:  &availableChairs[bestIdx],
-				rideID: ride.ID,
-				userID: ride.UserID,
+				chairID: availableChairs[bestIdx].ID,
+				rideID:  ride.ID,
+				userID:  ride.UserID,
 			})
 
 			// 使用済みの椅子をリストから除去(末尾とスワップして削除する)
@@ -200,16 +200,13 @@ HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0
 	}
 
 	for _, a := range assignments {
-		if _, err := tx.ExecContext(ctx, "UPDATE rides SET chair_id = ? WHERE id = ?", a.chair.ID, a.rideID); err != nil {
+		if _, err := tx.ExecContext(ctx, "UPDATE rides SET chair_id = ? WHERE id = ?", a.chairID, a.rideID); err != nil {
 			tx.Rollback()
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
 
-		Publish(a.rideID, &RideEvent{
-			status: "MATCHED",
-			chair:  a.chair,
-		})
+		notificationResponseCache.Forget(a.userID)
 	}
 
 	if err := tx.Commit(); err != nil {
