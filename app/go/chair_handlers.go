@@ -97,9 +97,10 @@ func chairPostActivity(w http.ResponseWriter, r *http.Request) {
 			if err := db.GetContext(ctx, &status, "SELECT status FROM rides JOIN ride_statuses ON rides.id = ride_statuses.ride_id WHERE chair_id = ? ORDER BY ride_statuses.created_at DESC LIMIT 1", chair.ID); err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
 					status = "COMPLETED"
+				} else {
+					writeError(w, r, http.StatusInternalServerError, err)
+					return
 				}
-				writeError(w, r, http.StatusInternalServerError, err)
-				return
 			}
 
 			if status == "COMPLETED" {
