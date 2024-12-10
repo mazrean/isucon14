@@ -85,8 +85,10 @@ func UserPublish(event string, message *RideEvent) {
 
 	userStatusGauge.WithLabelValues(message.status).Inc()
 	switch message.status {
-	case "MATCHED":
+	case "MATCHING":
 		userStatusGauge.WithLabelValues("COMPLETED").Dec()
+	case "MATCHED":
+		userStatusGauge.WithLabelValues("MATCHING").Dec()
 	case "ENROUTE":
 		userStatusGauge.WithLabelValues("MATCHED").Dec()
 	case "PICKUP":
