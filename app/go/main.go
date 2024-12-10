@@ -181,17 +181,17 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	req := &postInitializeRequest{}
 	if err := bindJSON(r, req); err != nil {
-		writeError(w, r, http.StatusBadRequest, err)
+		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 
 	if out, err := exec.Command("../sql/init.sh").CombinedOutput(); err != nil {
-		writeError(w, r, http.StatusInternalServerError, fmt.Errorf("failed to initialize: %s: %w", string(out), err))
+		writeError(w, http.StatusInternalServerError, fmt.Errorf("failed to initialize: %s: %w", string(out), err))
 		return
 	}
 
 	if _, err := db.ExecContext(ctx, "UPDATE settings SET value = ? WHERE name = 'payment_gateway_url'", req.PaymentServer); err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
+		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -209,7 +209,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 			ABS(longitude - LAG(longitude) OVER (PARTITION BY chair_id ORDER BY created_at)) AS distance
 		FROM chair_locations) tmp
 		GROUP BY chair_id`); err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
+		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -226,7 +226,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		FROM chair_locations
 		GROUP BY chair_id) cl2
 	ON cl.chair_id = cl2.chair_id AND cl.created_at = cl2.created_at`); err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
+		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -272,7 +272,7 @@ func writeJSON(w http.ResponseWriter, statusCode int, v interface{}) {
 	w.Write(buf)
 }
 
-func writeError(w http.ResponseWriter, r *http.Request, statusCode int, err error) {
+func writeError(w http.ResponseWriter, statusCode int, err error) {
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	w.WriteHeader(statusCode)
 	buf, marshalError := json.Marshal(map[string]string{"message": err.Error()})
@@ -284,8 +284,6 @@ func writeError(w http.ResponseWriter, r *http.Request, statusCode int, err erro
 	w.Write(buf)
 
 	slog.Error("error response wrote",
-		slog.String("path", r.URL.Path),
-		slog.Int("status_code", statusCode),
 		slog.String("error", err.Error()),
 	)
 }

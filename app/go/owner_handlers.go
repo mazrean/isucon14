@@ -29,11 +29,11 @@ func ownerPostOwners(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	req := &ownerPostOwnersRequest{}
 	if err := bindJSON(r, req); err != nil {
-		writeError(w, r, http.StatusBadRequest, err)
+		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 	if req.Name == "" {
-		writeError(w, r, http.StatusBadRequest, errors.New("some of required fields(name) are empty"))
+		writeError(w, http.StatusBadRequest, errors.New("some of required fields(name) are empty"))
 		return
 	}
 
@@ -47,7 +47,7 @@ func ownerPostOwners(w http.ResponseWriter, r *http.Request) {
 		ownerID, req.Name, accessToken, chairRegisterToken,
 	)
 	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
+		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -87,7 +87,7 @@ func ownerGetSales(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("since") != "" {
 		parsed, err := strconv.ParseInt(r.URL.Query().Get("since"), 10, 64)
 		if err != nil {
-			writeError(w, r, http.StatusBadRequest, err)
+			writeError(w, http.StatusBadRequest, err)
 			return
 		}
 		since = time.UnixMilli(parsed)
@@ -95,7 +95,7 @@ func ownerGetSales(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("until") != "" {
 		parsed, err := strconv.ParseInt(r.URL.Query().Get("until"), 10, 64)
 		if err != nil {
-			writeError(w, r, http.StatusBadRequest, err)
+			writeError(w, http.StatusBadRequest, err)
 			return
 		}
 		until = time.UnixMilli(parsed)
@@ -105,14 +105,14 @@ func ownerGetSales(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := db.Beginx()
 	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
+		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 	defer tx.Rollback()
 
 	chairs := []Chair{}
 	if err := tx.SelectContext(ctx, &chairs, "SELECT * FROM chairs WHERE owner_id = ?", owner.ID); err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
+		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -124,7 +124,7 @@ func ownerGetSales(w http.ResponseWriter, r *http.Request) {
 	for _, chair := range chairs {
 		rides := []Ride{}
 		if err := tx.SelectContext(ctx, &rides, "SELECT rides.* FROM rides JOIN ride_statuses ON rides.id = ride_statuses.ride_id WHERE chair_id = ? AND status = 'COMPLETED' AND updated_at BETWEEN ? AND ? + INTERVAL 999 MICROSECOND", chair.ID, since, until); err != nil {
-			writeError(w, r, http.StatusInternalServerError, err)
+			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
 
@@ -215,7 +215,7 @@ func ownerGetChairs(w http.ResponseWriter, r *http.Request) {
        updated_at
 FROM chairs WHERE owner_id = ?
 `, owner.ID); err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
+		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 

@@ -42,7 +42,7 @@ func appAuthMiddleware(next http.Handler) http.Handler {
 		ctx := r.Context()
 		c, err := r.Cookie("app_session")
 		if errors.Is(err, http.ErrNoCookie) || c.Value == "" {
-			writeError(w, r, http.StatusUnauthorized, errors.New("app_session cookie is required"))
+			writeError(w, http.StatusUnauthorized, errors.New("app_session cookie is required"))
 			return
 		}
 		accessToken := c.Value
@@ -50,10 +50,10 @@ func appAuthMiddleware(next http.Handler) http.Handler {
 		user, err := accessTokenCache.Get(ctx, accessToken)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				writeError(w, r, http.StatusUnauthorized, errors.New("invalid access token"))
+				writeError(w, http.StatusUnauthorized, errors.New("invalid access token"))
 				return
 			}
-			writeError(w, r, http.StatusInternalServerError, err)
+			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
 
@@ -86,7 +86,7 @@ func ownerAuthMiddleware(next http.Handler) http.Handler {
 		ctx := r.Context()
 		c, err := r.Cookie("owner_session")
 		if errors.Is(err, http.ErrNoCookie) || c.Value == "" {
-			writeError(w, r, http.StatusUnauthorized, errors.New("owner_session cookie is required"))
+			writeError(w, http.StatusUnauthorized, errors.New("owner_session cookie is required"))
 			return
 		}
 		accessToken := c.Value
@@ -94,10 +94,10 @@ func ownerAuthMiddleware(next http.Handler) http.Handler {
 		owner, err := ownerCache.Get(ctx, accessToken)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				writeError(w, r, http.StatusUnauthorized, errors.New("invalid access token"))
+				writeError(w, http.StatusUnauthorized, errors.New("invalid access token"))
 				return
 			}
-			writeError(w, r, http.StatusInternalServerError, err)
+			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
 
@@ -111,7 +111,7 @@ func chairAuthMiddleware(next http.Handler) http.Handler {
 		ctx := r.Context()
 		c, err := r.Cookie("chair_session")
 		if errors.Is(err, http.ErrNoCookie) || c.Value == "" {
-			writeError(w, r, http.StatusUnauthorized, errors.New("chair_session cookie is required"))
+			writeError(w, http.StatusUnauthorized, errors.New("chair_session cookie is required"))
 			return
 		}
 		accessToken := c.Value
@@ -119,10 +119,10 @@ func chairAuthMiddleware(next http.Handler) http.Handler {
 		err = db.GetContext(ctx, chair, "SELECT * FROM chairs WHERE access_token = ?", accessToken)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				writeError(w, r, http.StatusUnauthorized, errors.New("invalid access token"))
+				writeError(w, http.StatusUnauthorized, errors.New("invalid access token"))
 				return
 			}
-			writeError(w, r, http.StatusInternalServerError, err)
+			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
 
