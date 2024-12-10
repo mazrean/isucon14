@@ -109,7 +109,8 @@ func getChairLocationFromBadger(chairID string) (*chairLocation, bool, error) {
 		ok       bool
 	)
 	err := badgerDB.View(func(txn *badger.Txn) error {
-		item, err := txn.Get([]byte(chairID))
+		bytesChairID := append([]byte("location"), []byte(chairID)...)
+		item, err := txn.Get(bytesChairID)
 		if errors.Is(err, badger.ErrKeyNotFound) {
 			ok = false
 			return nil
