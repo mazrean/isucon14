@@ -385,10 +385,11 @@ func appPostRides(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	statusID := ulid.Make().String()
 	if _, err := tx.ExecContext(
 		ctx,
 		`INSERT INTO ride_statuses (id, ride_id, status) VALUES (?, ?, ?)`,
-		ulid.Make().String(), rideID, "MATCHING",
+		statusID, rideID, "MATCHING",
 	); err != nil {
 		writeError(w, r, http.StatusInternalServerError, err)
 		return
@@ -471,7 +472,11 @@ func appPostRides(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rideStatusesCache.Forget(rideID)
+	rideStatusesCache.Store(rideID, &RideStatus{
+		ID:     statusID,
+		RideID: rideID,
+		Status: "MATCHING",
+	})
 	UserPublish(ride.UserID, &RideEvent{
 		status:    "MATCHING",
 		updatedAt: now,
