@@ -193,7 +193,6 @@ HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0
 			return
 		}
 
-		notificationResponseCache.Forget(a.userID)
 		Publish(a.rideID, &RideEvent{
 			status: "MATCHED",
 			chair:  a.chair,
