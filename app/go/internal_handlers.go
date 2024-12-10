@@ -148,7 +148,7 @@ HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0
 			}
 
 			length := distance(ride.DestinationLatitude, ride.DestinationLongitude, location.LastLatitude, location.LastLongitude) + distance(ride.DestinationLatitude, ride.DestinationLongitude, ride.PickupLatitude, ride.PickupLongitude)
-			dist := float64(length)
+			dist := float64(length) / float64(chairModelSpeedCache[ch.Model])
 			if dist < bestDist {
 				bestDist = dist
 				bestIdx = i
