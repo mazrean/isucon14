@@ -2,12 +2,10 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -981,8 +979,6 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reqID := ulid.MustNew(ulid.Now(), rand.Reader).String()
-
 	lat, err := strconv.Atoi(latStr)
 	if err != nil {
 		writeError(w, r, http.StatusBadRequest, errors.New("latitude is invalid"))
@@ -1013,126 +1009,85 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	// Fetch all active chairs
 	chairs := []Chair{}
 	err = tx.SelectContext(
 		ctx,
 		&chairs,
-		`SELECT * FROM chairs WHERE is_active = TRUE`,
+		`SELECT * FROM chairs`,
 	)
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	if len(chairs) == 0 {
-		writeJSON(w, http.StatusOK, &appGetNearbyChairsResponse{
-			Chairs:      []appGetNearbyChairsResponseChair{},
-			RetrievedAt: time.Now().UnixMilli(),
-		})
-		return
-	}
-
-	// Collect all chair IDs
-	chairIDs := make([]string, 0, len(chairs))
-	for _, chair := range chairs {
-		chairIDs = append(chairIDs, chair.ID)
-	}
-
-	// Fetch all rides for all chairs
-	rides := []*Ride{}
-	query, args, err := sqlx.In(`SELECT * FROM rides WHERE chair_id IN (?) ORDER BY created_at DESC`, chairIDs)
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
-		return
-	}
-	query = tx.Rebind(query)
-	err = tx.SelectContext(ctx, &rides, query, args...)
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
-		return
-	}
-
-	// Group rides by chair_id
-	rideMap := make(map[string][]*Ride)
-	for _, ride := range rides {
-		rideMap[ride.ChairID.String] = append(rideMap[ride.ChairID.String], ride)
-	}
-
-	completedChairs := []*Chair{}
-NEAR_BY_LOOP:
-	for _, chair := range chairs {
-		// Check rides for this chair
-		if chairRides, exists := rideMap[chair.ID]; exists {
-			for _, ride := range chairRides {
-				// 過去にライドが存在し、かつ、それが完了していない場合はスキップ
-				status, err := getLatestRideStatus(ctx, tx, ride.ID)
-				if err != nil {
-					writeError(w, r, http.StatusInternalServerError, fmt.Errorf("status not found for ride ID: %s", ride.ID))
-					return
-				}
-				if status != "COMPLETED" {
-					slog.Info("skip chair",
-						slog.String("req_id", reqID),
-						slog.String("chair_id", chair.ID),
-						slog.String("ride_id", ride.ID),
-						slog.String("status", status),
-					)
-					continue NEAR_BY_LOOP
-				}
-			}
-		}
-
-		slog.Info("add chair",
-			slog.String("req_id", reqID),
-			slog.String("chair_id", chair.ID),
-		)
-		completedChairs = append(completedChairs, &chair)
-	}
-
 	nearbyChairs := []appGetNearbyChairsResponseChair{}
-	for _, chair := range completedChairs {
-		// Get the latest ChairLocation
-		chairLocation, exists := chairLocationCache.Load(chair.ID)
-		if !exists {
+	for _, chair := range chairs {
+		if !chair.IsActive {
 			continue
 		}
 
-		if calculateDistance(coordinate.Latitude, coordinate.Longitude, chairLocation.LastLatitude, chairLocation.LastLongitude) <= distance {
+		rides := []*Ride{}
+		if err := tx.SelectContext(ctx, &rides, `SELECT * FROM rides WHERE chair_id = ? ORDER BY created_at DESC`, chair.ID); err != nil {
+			writeError(w, r, http.StatusInternalServerError, err)
+			return
+		}
+
+		skip := false
+		for _, ride := range rides {
+			// 過去にライドが存在し、かつ、それが完了していない場合はスキップ
+			status, err := getLatestRideStatus(ctx, tx, ride.ID)
+			if err != nil {
+				writeError(w, r, http.StatusInternalServerError, err)
+				return
+			}
+			if status != "COMPLETED" {
+				skip = true
+				break
+			}
+		}
+		if skip {
+			continue
+		}
+
+		// 最新の位置情報を取得
+		chairLocation := &ChairLocation{}
+		err = tx.GetContext(
+			ctx,
+			chairLocation,
+			`SELECT * FROM chair_locations WHERE chair_id = ? ORDER BY created_at DESC LIMIT 1`,
+			chair.ID,
+		)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				continue
+			}
+			writeError(w, r, http.StatusInternalServerError, err)
+			return
+		}
+
+		if calculateDistance(coordinate.Latitude, coordinate.Longitude, chairLocation.Latitude, chairLocation.Longitude) <= distance {
 			nearbyChairs = append(nearbyChairs, appGetNearbyChairsResponseChair{
 				ID:    chair.ID,
 				Name:  chair.Name,
 				Model: chair.Model,
 				CurrentCoordinate: Coordinate{
-					Latitude:  chairLocation.LastLatitude,
-					Longitude: chairLocation.LastLongitude,
+					Latitude:  chairLocation.Latitude,
+					Longitude: chairLocation.Longitude,
 				},
 			})
 		}
 	}
-	logItems := []any{
-		slog.String("req_id", reqID),
-		slog.Int("lat", lat),
-		slog.Int("lon", lon),
-		slog.Int("distance", distance),
-		slog.Int("nearby_chairs_count", len(nearbyChairs)),
-		slog.Int("completed_chairs_count", len(completedChairs)),
-		slog.Int("active_chairs_count", len(chairs)),
-	}
-	for i, chair := range nearbyChairs {
-		logItems = append(logItems,
-			slog.Group(strconv.Itoa(i),
-				slog.String("chair_id", chair.ID),
-				slog.String("chair_name", chair.Name),
-				slog.String("chair_model", chair.Model),
-				slog.Int("chair_latitude", chair.CurrentCoordinate.Latitude),
-				slog.Int("chair_longitude", chair.CurrentCoordinate.Longitude),
-			),
-		)
-	}
-	slog.Info("nearbyChairs", logItems...)
 
-	retrievedAt := time.Now()
+	retrievedAt := &time.Time{}
+	err = tx.GetContext(
+		ctx,
+		retrievedAt,
+		`SELECT CURRENT_TIMESTAMP(6)`,
+	)
+	if err != nil {
+		writeError(w, r, http.StatusInternalServerError, err)
+		return
+	}
 
 	writeJSON(w, http.StatusOK, &appGetNearbyChairsResponse{
 		Chairs:      nearbyChairs,
