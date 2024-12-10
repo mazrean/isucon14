@@ -101,20 +101,11 @@ func appPostUsers(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// 招待クーポン付与
-		_, err = tx.ExecContext(
-			ctx,
-			"INSERT INTO coupons (user_id, code, discount) VALUES (?, ?, ?)",
-			userID, "INV_"+*req.InvitationCode, 1500,
-		)
-		if err != nil {
-			writeError(w, r, http.StatusInternalServerError, err)
-			return
-		}
 		// 招待した人にもRewardを付与
 		_, err = tx.ExecContext(
 			ctx,
-			"INSERT INTO coupons (user_id, code, discount) VALUES (?, CONCAT(?, '_', FLOOR(UNIX_TIMESTAMP(NOW(3))*1000)), ?)",
-			inviter.ID, "RWD_"+*req.InvitationCode, 1000,
+			"INSERT INTO coupons (user_id, code, discount) VALUES (?, ?, ?), (?, CONCAT(?, '_', FLOOR(UNIX_TIMESTAMP(NOW(3))*1000)), ?)",
+			userID, "INV_"+*req.InvitationCode, 1500, inviter.ID, "RWD_"+*req.InvitationCode, 1000,
 		)
 		if err != nil {
 			writeError(w, r, http.StatusInternalServerError, err)
@@ -127,7 +118,6 @@ func appPostUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	accessTokenCache.Forget(accessToken)
-	ownerCache.Forget(accessToken)
 
 	http.SetCookie(w, &http.Cookie{
 		Path:  "/",
