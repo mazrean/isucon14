@@ -91,6 +91,25 @@ func chairPostActivity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	func() {
+		if req.IsActive {
+			emptyChairsLocker.Lock()
+			defer emptyChairsLocker.Unlock()
+
+			emptyChairs = append(emptyChairs, chair)
+		} else {
+			emptyChairsLocker.Lock()
+			defer emptyChairsLocker.Unlock()
+
+			for i, c := range emptyChairs {
+				if c.ID == chair.ID {
+					emptyChairs = append(emptyChairs[:i], emptyChairs[i+1:]...)
+					break
+				}
+			}
+		}
+	}()
+
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -357,6 +376,15 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 				}
 
 				response.Status = status.Status
+			}
+
+			if response.Status == "COMPLETED" {
+				func() {
+					emptyChairsLocker.Lock()
+					defer emptyChairsLocker.Unlock()
+
+					emptyChairs = append(emptyChairs, chair)
+				}()
 			}
 
 			sb := &strings.Builder{}

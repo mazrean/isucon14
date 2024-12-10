@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"net/http"
+	"sync"
 	"time"
 
 	"golang.org/x/exp/slog"
@@ -68,6 +69,39 @@ var chairModelSpeedCache = map[string]int{
 	"風雅（ふうが）チェア": 3,
 }
 
+var (
+	emptyChairs       = []*Chair{}
+	emptyChairsLocker = sync.RWMutex{}
+)
+
+func initEmptyChairs() error {
+	emptyChairsLocker.Lock()
+	defer emptyChairsLocker.Unlock()
+
+	query := `
+SELECT c.*
+FROM chairs c
+LEFT JOIN rides r ON r.chair_id = c.id
+LEFT JOIN (
+    SELECT ride_id, (COUNT(chair_sent_at) = 6) AS completed
+    FROM ride_statuses
+    GROUP BY ride_id
+) rs ON rs.ride_id = r.id
+WHERE c.is_active = TRUE
+GROUP BY c.id
+HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0 END) = 0
+`
+	if err := db.Select(&emptyChairs, query); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+
+		return err
+	}
+
+	return nil
+}
+
 // このAPIをインスタンス内から一定間隔で叩かせることで、椅子とライドをマッチングさせる
 func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -93,32 +127,14 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. 空いている椅子を一括取得
-	//   ロジック: 全ての関連rideがcompleted状態か、関連rideがない椅子を抽出。
-	//   下記クエリ例は前回例と同様に適当に定義しています。
-	query := `
-SELECT c.*
-FROM chairs c
-LEFT JOIN rides r ON r.chair_id = c.id
-LEFT JOIN (
-    SELECT ride_id, (COUNT(chair_sent_at) = 6) AS completed
-    FROM ride_statuses
-    GROUP BY ride_id
-) rs ON rs.ride_id = r.id
-WHERE c.is_active = TRUE
-GROUP BY c.id
-HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0 END) = 0
-`
-	var chairs []Chair
-	if err := db.SelectContext(ctx, &chairs, query); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			// 空いている椅子が無い場合
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		writeError(w, r, http.StatusInternalServerError, err)
-		return
-	}
+	var chairs []*Chair
+	func() {
+		emptyChairsLocker.Lock()
+		defer emptyChairsLocker.Unlock()
+
+		chairs = emptyChairs
+		emptyChairs = []*Chair{}
+	}()
 
 	if len(chairs) == 0 {
 		// 空き椅子なし
@@ -200,17 +216,12 @@ HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0
 		return
 	}
 
+	matchedChairIDMap := map[string]struct{}{}
 	for _, a := range assignments {
 		if _, err := db.ExecContext(ctx, "UPDATE rides SET chair_id = ?, updated_at = ? WHERE id = ?", a.chairID, time.Now(), a.rideID); err != nil {
 			writeError(w, r, http.StatusInternalServerError, err)
 			return
 		}
-
-		slog.Info("ride matched",
-			"ride_id", a.rideID,
-			"chair_id", a.chairID,
-			"user_id", a.userID,
-		)
 
 		ChairPublish(a.chairID, &RideEvent{
 			status:  "MATCHED",
@@ -222,6 +233,13 @@ HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0
 			chairID: a.chairID,
 			rideID:  a.rideID,
 		})
+		matchedChairIDMap[a.chairID] = struct{}{}
+	}
+
+	for _, ch := range chairs {
+		if _, ok := matchedChairIDMap[ch.ID]; !ok {
+			emptyChairs = append(emptyChairs, ch)
+		}
 	}
 
 	w.WriteHeader(http.StatusNoContent)

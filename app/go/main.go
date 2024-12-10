@@ -77,6 +77,11 @@ func main() {
 		})
 	}
 
+	if err := initEmptyChairs(); err != nil {
+		panic(err)
+		return
+	}
+
 	isuhttp.ListenAndServe(":8080", mux)
 }
 
@@ -248,6 +253,11 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	initEventBus()
+
+	if err := initEmptyChairs(); err != nil {
+		writeError(w, r, http.StatusInternalServerError, err)
+		return
+	}
 
 	writeJSON(w, http.StatusOK, postInitializeResponse{Language: "go"})
 }
