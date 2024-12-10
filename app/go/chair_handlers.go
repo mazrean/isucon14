@@ -378,15 +378,6 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 				response.Status = status.Status
 			}
 
-			if response.Status == "COMPLETED" {
-				func() {
-					emptyChairsLocker.Lock()
-					defer emptyChairsLocker.Unlock()
-
-					emptyChairs = append(emptyChairs, chair)
-				}()
-			}
-
 			sb := &strings.Builder{}
 			err = json.NewEncoder(sb).Encode(response)
 			if err != nil {
@@ -400,6 +391,15 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				writeError(w, r, http.StatusInternalServerError, err)
 				return
+			}
+
+			if response.Status == "COMPLETED" {
+				go func() {
+					emptyChairsLocker.Lock()
+					defer emptyChairsLocker.Unlock()
+
+					emptyChairs = append(emptyChairs, chair)
+				}()
 			}
 		}
 	}
