@@ -204,21 +204,9 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	chairLocationCache.Update(chair.ID, func(cl *chairLocation) (*chairLocation, bool) {
-		if cl == nil {
-			return &chairLocation{
-				TotalDistance:          0,
-				LastLatitude:           req.Latitude,
-				LastLongitude:          req.Longitude,
-				TotalDistanceUpdatedAt: time.Now(),
-			}, true
-		}
-		return &chairLocation{
-			TotalDistance:          cl.TotalDistance + distance(cl.LastLatitude, cl.LastLongitude, req.Latitude, req.Longitude),
-			LastLatitude:           req.Latitude,
-			LastLongitude:          req.Longitude,
-			TotalDistanceUpdatedAt: time.Now(),
-		}, true
+	updateChairLocationToBadger(chair.ID, &Coordinate{
+		Latitude:  req.Latitude,
+		Longitude: req.Longitude,
 	})
 
 	if err := tx.Commit(); err != nil {

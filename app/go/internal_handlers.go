@@ -208,7 +208,11 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 		bestIdx := -1
 		bestDist := math.MaxFloat64
 		for i, ch := range availableChairs {
-			location, ok := chairLocationCache.Load(ch.ID)
+			location, ok, err := getChairLocationFromBadger(ch.ID)
+			if err != nil {
+				writeError(w, r, http.StatusInternalServerError, err)
+				return
+			}
 			if !ok {
 				continue
 			}

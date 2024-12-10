@@ -1131,7 +1131,11 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Get the latest ChairLocation
-		chairLocation, exists := chairLocationCache.Load(chair.ID)
+		chairLocation, exists, err := getChairLocationFromBadger(chair.ID)
+		if err != nil {
+			writeError(w, r, http.StatusInternalServerError, err)
+			return
+		}
 		if !exists {
 			continue
 		}

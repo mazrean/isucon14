@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	isucache "github.com/mazrean/isucon-go-tools/v2/cache"
 	"github.com/oklog/ulid/v2"
 )
 
@@ -198,8 +197,6 @@ type chairLocation struct {
 	TotalDistanceUpdatedAt time.Time `db:"total_distance_updated_at"`
 }
 
-var chairLocationCache = isucache.NewAtomicMap[string, *chairLocation]("chairLocationCache")
-
 func ownerGetChairs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	owner := ctx.Value("owner").(*Owner)
@@ -222,7 +219,11 @@ FROM chairs WHERE owner_id = ?
 	for i := range chairs {
 		chair := &chairs[i]
 
-		location, ok := chairLocationCache.Load(chair.ID)
+		location, ok, err := getChairLocationFromBadger(chair.ID)
+		if err != nil {
+			writeError(w, r, http.StatusInternalServerError, err)
+			return
+		}
 		if !ok {
 			continue
 		}

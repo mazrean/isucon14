@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -27,54 +26,8 @@ func main() {
 	mux := setup()
 	slog.Info("Listening on :8080")
 
-	var chairLocations []struct {
-		ChairID   string    `db:"chair_id"`
-		TotalDist int       `db:"total_distance"`
-		UpdatedAt time.Time `db:"total_distance_updated_at"`
-	}
-	if err := db.Select(&chairLocations, `SELECT chair_id,
-		SUM(IFNULL(distance, 0)) AS total_distance,
-		MAX(created_at)          AS total_distance_updated_at
-	FROM (SELECT chair_id,
-			created_at,
-			ABS(latitude - LAG(latitude) OVER (PARTITION BY chair_id ORDER BY created_at)) +
-			ABS(longitude - LAG(longitude) OVER (PARTITION BY chair_id ORDER BY created_at)) AS distance
-		FROM chair_locations) tmp
-		GROUP BY chair_id`); err != nil {
+	if err := initBadger(); err != nil {
 		panic(err)
-	}
-
-	var chairLatestLocations []struct {
-		ChairID       string `db:"chair_id"`
-		LastLatitude  int    `db:"latitude"`
-		LastLongitude int    `db:"longitude"`
-	}
-	if err := db.Select(&chairLatestLocations, `SELECT cl.chair_id,
-		cl.latitude,
-		cl.longitude
-	FROM chair_locations cl
-	JOIN (SELECT chair_id, MAX(created_at) AS created_at
-		FROM chair_locations
-		GROUP BY chair_id) cl2
-	ON cl.chair_id = cl2.chair_id AND cl.created_at = cl2.created_at`); err != nil {
-		panic(err)
-	}
-
-	chairLatestLocationMap := make(map[string]Coordinate)
-	for _, loc := range chairLatestLocations {
-		chairLatestLocationMap[loc.ChairID] = Coordinate{
-			Latitude:  loc.LastLatitude,
-			Longitude: loc.LastLongitude,
-		}
-	}
-
-	for _, loc := range chairLocations {
-		chairLocationCache.Store(loc.ChairID, &chairLocation{
-			TotalDistance:          loc.TotalDist,
-			LastLatitude:           chairLatestLocationMap[loc.ChairID].Latitude,
-			LastLongitude:          chairLatestLocationMap[loc.ChairID].Longitude,
-			TotalDistanceUpdatedAt: loc.UpdatedAt,
-		})
 	}
 
 	if err := initEmptyChairs(); err != nil {
@@ -203,56 +156,9 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var chairLocations []struct {
-		ChairID   string    `db:"chair_id"`
-		TotalDist int       `db:"total_distance"`
-		UpdatedAt time.Time `db:"total_distance_updated_at"`
-	}
-	if err := db.SelectContext(ctx, &chairLocations, `SELECT chair_id,
-		SUM(IFNULL(distance, 0)) AS total_distance,
-		MAX(created_at)          AS total_distance_updated_at
-	FROM (SELECT chair_id,
-			created_at,
-			ABS(latitude - LAG(latitude) OVER (PARTITION BY chair_id ORDER BY created_at)) +
-			ABS(longitude - LAG(longitude) OVER (PARTITION BY chair_id ORDER BY created_at)) AS distance
-		FROM chair_locations) tmp
-		GROUP BY chair_id`); err != nil {
+	if err := initBadger(); err != nil {
 		writeError(w, r, http.StatusInternalServerError, err)
 		return
-	}
-
-	var chairLatestLocations []struct {
-		ChairID       string `db:"chair_id"`
-		LastLatitude  int    `db:"latitude"`
-		LastLongitude int    `db:"longitude"`
-	}
-	if err := db.SelectContext(ctx, &chairLatestLocations, `SELECT cl.chair_id,
-		cl.latitude,
-		cl.longitude
-	FROM chair_locations cl
-	JOIN (SELECT chair_id, MAX(created_at) AS created_at
-		FROM chair_locations
-		GROUP BY chair_id) cl2
-	ON cl.chair_id = cl2.chair_id AND cl.created_at = cl2.created_at`); err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
-		return
-	}
-
-	chairLatestLocationMap := make(map[string]Coordinate)
-	for _, loc := range chairLatestLocations {
-		chairLatestLocationMap[loc.ChairID] = Coordinate{
-			Latitude:  loc.LastLatitude,
-			Longitude: loc.LastLongitude,
-		}
-	}
-
-	for _, loc := range chairLocations {
-		chairLocationCache.Store(loc.ChairID, &chairLocation{
-			TotalDistance:          loc.TotalDist,
-			LastLatitude:           chairLatestLocationMap[loc.ChairID].Latitude,
-			LastLongitude:          chairLatestLocationMap[loc.ChairID].Longitude,
-			TotalDistanceUpdatedAt: loc.UpdatedAt,
-		})
 	}
 
 	initEventBus()
