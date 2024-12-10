@@ -132,6 +132,10 @@ HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0
 
 	// 割当がなかった場合
 	if len(assignments) == 0 {
+		slog.Info("no matching",
+			"rides", len(rides),
+			"chairs", len(chairs),
+		)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
