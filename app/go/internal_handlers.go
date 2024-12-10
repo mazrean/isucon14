@@ -141,16 +141,8 @@ HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0
 		return
 	}
 
-	// 4. トランザクションで一括更新
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
-		return
-	}
-
 	for _, a := range assignments {
-		if _, err := tx.ExecContext(ctx, "UPDATE rides SET chair_id = ?, updated_at = ? WHERE id = ?", a.chairID, time.Now(), a.rideID); err != nil {
-			tx.Rollback()
+		if _, err := db.ExecContext(ctx, "UPDATE rides SET chair_id = ?, updated_at = ? WHERE id = ?", a.chairID, time.Now(), a.rideID); err != nil {
 			writeError(w, r, http.StatusInternalServerError, err)
 			return
 		}
@@ -171,11 +163,6 @@ HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0
 			chairID: a.chairID,
 			rideID:  a.rideID,
 		})
-	}
-
-	if err := tx.Commit(); err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
-		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
