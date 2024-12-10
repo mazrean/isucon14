@@ -288,6 +288,7 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 		slog.String("chair_id", chair.ID),
 		slog.String("user_id", response.User.ID),
 		slog.String("status", response.Status),
+		slog.String("response", sb.String()),
 	)
 
 	_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE ride_id = ? AND chair_sent_at IS NULL ORDER BY created_at ASC LIMIT 1`, ride.ID)
@@ -309,7 +310,7 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 
 			response.Status = event.status
 
-			sb.Reset()
+			sb := &strings.Builder{}
 			err = json.NewEncoder(sb).Encode(response)
 			if err != nil {
 				writeError(w, r, http.StatusInternalServerError, fmt.Errorf("failed to encode response: %w", err))
@@ -322,6 +323,7 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 				slog.String("chair_id", chair.ID),
 				slog.String("user_id", response.User.ID),
 				slog.String("status", response.Status),
+				slog.String("response", sb.String()),
 			)
 
 			_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE ride_id = ? AND chair_sent_at IS NULL ORDER BY created_at ASC LIMIT 1`, ride.ID)
