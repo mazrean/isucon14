@@ -244,10 +244,6 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 			rideID:  a.rideID,
 		})
 		matchedChairIDMap[a.chairID] = struct{}{}
-		slog.Info("chair is matched",
-			slog.String("chair_id", a.chairID),
-			slog.String("ride_id", a.rideID),
-		)
 	}
 
 	for _, ch := range chairs {
@@ -257,9 +253,6 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 				defer emptyChairsLocker.Unlock()
 
 				emptyChairs = append(emptyChairs, ch)
-				slog.Info("chair is added to empty chairs in matching",
-					slog.String("chair_id", ch.ID),
-				)
 			}()
 		}
 	}

@@ -1087,40 +1087,9 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 		chairIDs[i] = chair.ID
 	}
 
-	// Fetch latest chair_locations for all chairs in a single query
-	latestChairLocations := []ChairLocation{}
-	query, args, err := sqlx.In(`
-		SELECT cl.*
-		FROM chair_locations cl
-		INNER JOIN (
-			SELECT chair_id, MAX(created_at) as latest_created_at
-			FROM chair_locations
-			WHERE chair_id IN (?)
-			GROUP BY chair_id
-		) latest_cl
-		ON cl.chair_id = latest_cl.chair_id AND cl.created_at = latest_cl.latest_created_at
-	`, chairIDs)
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
-		return
-	}
-	query = tx.Rebind(query)
-
-	err = tx.SelectContext(ctx, &latestChairLocations, query, args...)
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
-		return
-	}
-
-	// Map chair_id to ChairLocation
-	chairLocationMap := make(map[string]ChairLocation, len(latestChairLocations))
-	for _, cl := range latestChairLocations {
-		chairLocationMap[cl.ChairID] = cl
-	}
-
 	// Fetch all rides for all chairs
 	rides := []*Ride{}
-	query, args, err = sqlx.In(`SELECT * FROM rides WHERE chair_id IN (?) ORDER BY created_at DESC`, chairIDs)
+	query, args, err := sqlx.In(`SELECT * FROM rides WHERE chair_id IN (?) ORDER BY created_at DESC`, chairIDs)
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, err)
 		return
@@ -1170,19 +1139,19 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Get the latest ChairLocation
-		chairLocation, exists := chairLocationMap[chair.ID]
+		chairLocation, exists := chairLocationCache.Load(chair.ID)
 		if !exists {
 			continue
 		}
 
-		if calculateDistance(coordinate.Latitude, coordinate.Longitude, chairLocation.Latitude, chairLocation.Longitude) <= distance {
+		if calculateDistance(coordinate.Latitude, coordinate.Longitude, chairLocation.LastLatitude, chairLocation.LastLongitude) <= distance {
 			nearbyChairs = append(nearbyChairs, appGetNearbyChairsResponseChair{
 				ID:    chair.ID,
 				Name:  chair.Name,
 				Model: chair.Model,
 				CurrentCoordinate: Coordinate{
-					Latitude:  chairLocation.Latitude,
-					Longitude: chairLocation.Longitude,
+					Latitude:  chairLocation.LastLatitude,
+					Longitude: chairLocation.LastLongitude,
 				},
 			})
 		}
