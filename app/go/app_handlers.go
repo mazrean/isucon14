@@ -76,18 +76,6 @@ func appPostUsers(w http.ResponseWriter, r *http.Request) {
 
 	// 招待コードを使った登録
 	if req.InvitationCode != nil && *req.InvitationCode != "" {
-		// 招待する側の招待数をチェック
-		var coupons []Coupon
-		err = tx.SelectContext(ctx, &coupons, "SELECT * FROM coupons WHERE code = ? FOR UPDATE", "INV_"+*req.InvitationCode)
-		if err != nil {
-			writeError(w, r, http.StatusInternalServerError, err)
-			return
-		}
-		if len(coupons) >= 3 {
-			writeError(w, r, http.StatusBadRequest, errors.New("この招待コードは使用できません。"))
-			return
-		}
-
 		// ユーザーチェック
 		var inviter User
 		err = tx.GetContext(ctx, &inviter, "SELECT * FROM users WHERE invitation_code = ?", *req.InvitationCode)
@@ -111,6 +99,19 @@ func appPostUsers(w http.ResponseWriter, r *http.Request) {
 			writeError(w, r, http.StatusInternalServerError, err)
 			return
 		}
+
+		// 招待する側の招待数をチェック
+		var coupons []Coupon
+		err = tx.SelectContext(ctx, &coupons, "SELECT * FROM coupons WHERE code = ?", "INV_"+*req.InvitationCode)
+		if err != nil {
+			writeError(w, r, http.StatusInternalServerError, err)
+			return
+		}
+		if len(coupons) > 3 {
+			writeError(w, r, http.StatusBadRequest, errors.New("この招待コードは使用できません。"))
+			return
+		}
+
 	}
 
 	if err := tx.Commit(); err != nil {
