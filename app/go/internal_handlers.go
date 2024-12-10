@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 	"time"
+
+	"golang.org/x/exp/slog"
 )
 
 // このAPIをインスタンス内から一定間隔で叩かせることで、椅子とライドをマッチングさせる
@@ -147,6 +149,12 @@ HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0
 			writeError(w, r, http.StatusInternalServerError, err)
 			return
 		}
+
+		slog.Info("ride matched",
+			"ride_id", a.rideID,
+			"chair_id", a.chairID,
+			"user_id", a.userID,
+		)
 
 		ChairPublish(a.chairID, &RideEvent{
 			status:  "MATCHED",
