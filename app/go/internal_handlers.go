@@ -80,6 +80,11 @@ HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0
 		return dx + dy
 	}
 
+	slog.Info("matching start",
+		"rides", len(rides),
+		"chairs", len(chairs),
+	)
+
 	// 3. メモリ上でマンハッタン距離が最短になる椅子を割り当てる
 	// 注意: rides数とchairs数が大きい場合、ここはO(N*M)になる
 	var assignments []struct {
@@ -132,10 +137,6 @@ HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0
 
 	// 割当がなかった場合
 	if len(assignments) == 0 {
-		slog.Info("no matching",
-			"rides", len(rides),
-			"chairs", len(chairs),
-		)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
