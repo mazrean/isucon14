@@ -822,7 +822,6 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 	flusher.Flush()
 	slog.Info("Sent notification to app1",
 		slog.String("ride_id", response.RideID),
-		slog.String("chair_id", response.Chair.ID),
 		slog.String("user_id", user.ID),
 		slog.String("status", response.Status),
 		slog.String("response", sb.String()),
@@ -921,7 +920,6 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 			slog.Info("Sent notification to app2",
 				slog.String("ride_id", response.RideID),
-				slog.String("chair_id", response.Chair.ID),
 				slog.String("user_id", user.ID),
 				slog.String("status", response.Status),
 				slog.String("response", sb.String()),
