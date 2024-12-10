@@ -191,7 +191,11 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 
 	rideStatusesCache.Forget(ride.ID)
 	if newStatus != "" {
-		Publish(chair.ID, &RideEvent{
+		ChairPublish(chair.ID, &RideEvent{
+			status: newStatus,
+			rideID: ride.ID,
+		})
+		UserPublish(ride.UserID, &RideEvent{
 			status: newStatus,
 			rideID: ride.ID,
 		})
@@ -305,7 +309,7 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ch := make(chan *RideEvent, 100)
-	Subscribe(chair.ID, ch)
+	ChairSubscribe(chair.ID, ch)
 	for {
 		select {
 		case <-r.Context().Done():
@@ -458,7 +462,11 @@ func chairPostRideStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	rideStatusesCache.Forget(ride.ID)
 
-	Publish(chair.ID, &RideEvent{
+	ChairPublish(chair.ID, &RideEvent{
+		status: req.Status,
+		rideID: ride.ID,
+	})
+	UserPublish(ride.UserID, &RideEvent{
 		status: req.Status,
 		rideID: ride.ID,
 	})

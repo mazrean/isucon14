@@ -17,50 +17,94 @@ type RideEvent struct {
 }
 
 var (
-	eventBus     = map[string][]chan<- *RideEvent{}
-	eventBusLock = sync.RWMutex{}
+	chairEventBus     = map[string][]chan<- *RideEvent{}
+	chairEventBusLock = sync.RWMutex{}
+	userEventBus      = map[string][]chan<- *RideEvent{}
+	userEventBusLock  = sync.RWMutex{}
 )
 
 func initEventBus() {
-	eventBusLock.Lock()
-	defer eventBusLock.Unlock()
+	chairEventBusLock.Lock()
+	defer chairEventBusLock.Unlock()
 
-	eventBus = make(map[string][]chan<- *RideEvent)
+	chairEventBus = make(map[string][]chan<- *RideEvent)
+
+	userEventBusLock.Lock()
+	defer userEventBusLock.Unlock()
+
+	userEventBus = make(map[string][]chan<- *RideEvent)
 }
 
-func Subscribe(event string, ch chan<- *RideEvent) {
-	eventBusLock.Lock()
-	defer eventBusLock.Unlock()
+func ChairSubscribe(event string, ch chan<- *RideEvent) {
+	chairEventBusLock.Lock()
+	defer chairEventBusLock.Unlock()
 
-	eventBus[event] = append(eventBus[event], ch)
+	chairEventBus[event] = append(chairEventBus[event], ch)
 }
 
-func Publish(event string, message *RideEvent) {
-	eventBusLock.RLock()
-	defer eventBusLock.RUnlock()
+func ChairPublish(event string, message *RideEvent) {
+	chairEventBusLock.RLock()
+	defer chairEventBusLock.RUnlock()
 
-	statusGauge.WithLabelValues(message.status).Inc()
+	chairStatusGauge.WithLabelValues(message.status).Inc()
 	switch message.status {
 	case "MATCHED":
-		statusGauge.WithLabelValues("MATCHING").Dec()
+		chairStatusGauge.WithLabelValues("COMPLETED").Dec()
 	case "ENROUTE":
-		statusGauge.WithLabelValues("MATCHED").Dec()
+		chairStatusGauge.WithLabelValues("MATCHED").Dec()
 	case "PICKUP":
-		statusGauge.WithLabelValues("ENROUTE").Dec()
+		chairStatusGauge.WithLabelValues("ENROUTE").Dec()
 	case "CARRYING":
-		statusGauge.WithLabelValues("PICKUP").Dec()
+		chairStatusGauge.WithLabelValues("PICKUP").Dec()
 	case "ARRIVED":
-		statusGauge.WithLabelValues("CARRYING").Dec()
+		chairStatusGauge.WithLabelValues("CARRYING").Dec()
 	case "COMPLETED":
-		statusGauge.WithLabelValues("ARRIVED").Dec()
+		chairStatusGauge.WithLabelValues("ARRIVED").Dec()
 	}
 
-	for _, ch := range eventBus[event] {
+	for _, ch := range chairEventBus[event] {
 		ch <- message
 	}
 }
 
-var statusGauge = promauto.NewGaugeVec(prometheus.GaugeOpts{
+var chairStatusGauge = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Name: "chair_status",
 	Help: "chair status",
+}, []string{"status"})
+
+func UserSubscribe(event string, ch chan<- *RideEvent) {
+	userEventBusLock.Lock()
+	defer userEventBusLock.Unlock()
+
+	userEventBus[event] = append(userEventBus[event], ch)
+}
+
+func UserPublish(event string, message *RideEvent) {
+	userEventBusLock.RLock()
+	defer userEventBusLock.RUnlock()
+
+	userStatusGauge.WithLabelValues(message.status).Inc()
+	switch message.status {
+	case "MATCHED":
+		userStatusGauge.WithLabelValues("COMPLETED").Dec()
+	case "ENROUTE":
+		userStatusGauge.WithLabelValues("MATCHED").Dec()
+	case "PICKUP":
+		userStatusGauge.WithLabelValues("ENROUTE").Dec()
+	case "CARRYING":
+		userStatusGauge.WithLabelValues("PICKUP").Dec()
+	case "ARRIVED":
+		userStatusGauge.WithLabelValues("CARRYING").Dec()
+	case "COMPLETED":
+		userStatusGauge.WithLabelValues("ARRIVED").Dec()
+	}
+
+	for _, ch := range userEventBus[event] {
+		ch <- message
+	}
+}
+
+var userStatusGauge = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	Name: "user_status",
+	Help: "user status",
 }, []string{"status"})

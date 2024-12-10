@@ -485,7 +485,7 @@ func appPostRides(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rideStatusesCache.Forget(rideID)
-	Publish(ride.ChairID.String, &RideEvent{
+	UserPublish(ride.UserID, &RideEvent{
 		status:    "MATCHING",
 		updatedAt: now,
 		rideID:    rideID,
@@ -688,7 +688,13 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 
 	rideStatusesCache.Forget(rideID)
 
-	Publish(ride.ChairID.String, &RideEvent{
+	ChairPublish(ride.ChairID.String, &RideEvent{
+		status:     "COMPLETED",
+		evaluation: req.Evaluation,
+		updatedAt:  now,
+		rideID:     rideID,
+	})
+	UserPublish(ride.UserID, &RideEvent{
 		status:     "COMPLETED",
 		evaluation: req.Evaluation,
 		updatedAt:  now,
@@ -821,14 +827,42 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ch := make(chan *RideEvent, 100)
-	Subscribe(response.Chair.ID, ch)
+	UserSubscribe(response.Chair.ID, ch)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case event := <-ch:
 			switch event.status {
-			case "MATCHING", "ENROUTE", "PICKUP", "CARRYING", "ARRIVED":
+			case "MATCHING":
+				if err := db.GetContext(ctx, ride, `SELECT * FROM rides WHERE id = ?`, event.rideID); err != nil {
+					if errors.Is(err, sql.ErrNoRows) {
+						writeJSON(w, http.StatusOK, &chairGetNotificationResponse{
+							RetryAfterMs: 100,
+						})
+						return
+					}
+					writeError(w, r, http.StatusInternalServerError, err)
+					return
+				}
+
+				fare, err := calculateDiscountedFareDB(ctx, db, user.ID, ride, ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude)
+				if err != nil {
+					writeError(w, r, http.StatusInternalServerError, err)
+					return
+				}
+
+				response = &appGetNotificationResponseData{
+					RideID:                ride.ID,
+					PickupCoordinate:      Coordinate{Latitude: ride.PickupLatitude, Longitude: ride.PickupLongitude},
+					DestinationCoordinate: Coordinate{Latitude: ride.DestinationLatitude, Longitude: ride.DestinationLongitude},
+					Fare:                  fare,
+					CreatedAt:             ride.CreatedAt.UnixMilli(),
+					UpdateAt:              ride.UpdatedAt.UnixMilli(),
+				}
+
+				response.Status = event.status
+			case "ENROUTE", "PICKUP", "CARRYING", "ARRIVED":
 				response.Status = event.status
 			case "MATCHED":
 				chair := &Chair{}
@@ -881,10 +915,6 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 			_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET app_sent_at = CURRENT_TIMESTAMP(6) WHERE ride_id = ? AND app_sent_at IS NULL ORDER BY created_at ASC LIMIT 1`, response.RideID)
 			if err != nil {
 				writeError(w, r, http.StatusInternalServerError, err)
-				return
-			}
-
-			if event.status == "COMPLETED" {
 				return
 			}
 		}
