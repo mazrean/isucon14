@@ -184,7 +184,6 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 	})
 
 	rideStatusesCache.Forget(ride.ID)
-	notificationResponseCache.Forget(ride.UserID)
 	if newStatus != "" {
 		Publish(ride.ID, &RideEvent{
 			status: newStatus,
@@ -410,7 +409,6 @@ func chairPostRideStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rideStatusesCache.Forget(ride.ID)
-	notificationResponseCache.Forget(ride.UserID)
 
 	Publish(ride.ID, &RideEvent{
 		status: req.Status,
