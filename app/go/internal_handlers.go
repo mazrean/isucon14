@@ -255,7 +255,6 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		updateChairStatusToBadger(a.chairID, rideStatusMatching)
 		ChairPublish(a.chairID, &RideEvent{
 			status:  "MATCHED",
 			chairID: a.chairID,
