@@ -154,19 +154,15 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 
 	var newStatus *RideStatus
 	ride := &Ride{}
-	if err := tx.GetContext(ctx, ride, `SELECT * FROM rides WHERE chair_id = ? ORDER BY updated_at DESC LIMIT 1`, chair.ID); err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
-			writeError(w, r, http.StatusInternalServerError, err)
-			return
-		}
-	} else {
-		status, err := getLatestRideStatus(ctx, tx, ride.ID)
-		if err != nil {
-			writeError(w, r, http.StatusInternalServerError, err)
-			return
-		}
-		if status != "COMPLETED" && status != "CANCELED" {
-			if req.Latitude == ride.PickupLatitude && req.Longitude == ride.PickupLongitude && status == "ENROUTE" {
+	status, ok, err := getChairStatusFromBadger(chair.ID)
+	if err != nil {
+		writeError(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	if ok {
+		if status != rideStatusCompleted {
+			if req.Latitude == ride.PickupLatitude && req.Longitude == ride.PickupLongitude && status == rideStatusEnRoute {
 				statusID := ulid.Make().String()
 				if _, err := tx.ExecContext(ctx, "INSERT INTO ride_statuses (id, ride_id, status) VALUES (?, ?, ?)", statusID, ride.ID, "PICKUP"); err != nil {
 					writeError(w, r, http.StatusInternalServerError, err)
@@ -179,7 +175,7 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			if req.Latitude == ride.DestinationLatitude && req.Longitude == ride.DestinationLongitude && status == "CARRYING" {
+			if req.Latitude == ride.DestinationLatitude && req.Longitude == ride.DestinationLongitude && status == rideStatusCarrying {
 				statusID := ulid.Make().String()
 				if _, err := tx.ExecContext(ctx, "INSERT INTO ride_statuses (id, ride_id, status) VALUES (?, ?, ?)", statusID, ride.ID, "ARRIVED"); err != nil {
 					writeError(w, r, http.StatusInternalServerError, err)
