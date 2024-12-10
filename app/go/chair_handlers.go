@@ -321,7 +321,7 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 				slog.String("ride_id", ride.ID),
 				slog.String("chair_id", chair.ID),
 				slog.String("user_id", user.ID),
-				slog.String("status", response.Status),
+				slog.String("status", status),
 			)
 
 			_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE ride_id = ? AND chair_sent_at IS NULL ORDER BY created_at ASC LIMIT 1`, ride.ID)
