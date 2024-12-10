@@ -16,7 +16,9 @@ const badgerDir = "../badger/"
 var badgerDB *badger.DB
 
 func initBadger() error {
-	badgerDB.Close()
+	if badgerDB != nil {
+		badgerDB.Close()
+	}
 
 	err := os.RemoveAll(badgerDir)
 	if err != nil && !os.IsNotExist(err) {
