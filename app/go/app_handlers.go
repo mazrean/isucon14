@@ -288,7 +288,7 @@ var rideStatusesCache = isucache.NewAtomicMap[string, *RideStatus]("rideStatuses
 
 func initRideStatusesCache() error {
 	var rideStatuses []RideStatus
-	if err := db.Select(&rideStatuses, "SELECT * FROM ride_statuses WHERE created_at = (SELECT MAX(created_at) FROM ride_statuses WHERE ride_id = ride_statuses.ride_id)"); err != nil {
+	if err := db.Select(&rideStatuses, "SELECT * FROM ride_statuses as ride_status WHERE ride_status.created_at = (SELECT MAX(rs.created_at) FROM ride_statuses as rs WHERE ride_status.ride_id = rs.ride_id)"); err != nil {
 		return err
 	}
 
