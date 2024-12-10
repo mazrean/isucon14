@@ -111,7 +111,7 @@ func init() {
 				emptyChairsLocker.RLock()
 				defer emptyChairsLocker.RUnlock()
 
-				return len(emptyChairs) > 20
+				return len(emptyChairs) > 5
 			}()
 			if isChairExist {
 				internalGetMatching(httptest.NewRecorder(), &http.Request{})
