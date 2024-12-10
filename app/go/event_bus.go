@@ -11,7 +11,7 @@ import (
 type RideEvent struct {
 	status     string
 	evaluation int
-	chair      *Chair
+	chairID    string
 	updatedAt  time.Time
 }
 
