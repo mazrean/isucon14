@@ -1,12 +1,13 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
+
+	"github.com/goccy/go-json"
 
 	_ "github.com/mazrean/isucon-go-tools/v2"
 	isuhttp "github.com/mazrean/isucon-go-tools/v2/http"

@@ -2,12 +2,13 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	isucache "github.com/mazrean/isucon-go-tools/v2/cache"
 	isuhttp "github.com/mazrean/isucon-go-tools/v2/http"

@@ -2,7 +2,6 @@ package main
 
 import (
 	crand "crypto/rand"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net"
@@ -10,6 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+
+	"github.com/goccy/go-json"
 
 	"github.com/dgraph-io/badger"
 	"github.com/go-chi/chi/v5"
