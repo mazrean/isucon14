@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -820,12 +819,6 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Fprintf(w, "data: %s\n", sb.String())
 	flusher.Flush()
-	slog.Info("Sent notification to app1",
-		slog.String("ride_id", response.RideID),
-		slog.String("user_id", user.ID),
-		slog.String("status", response.Status),
-		slog.String("response", sb.String()),
-	)
 
 	_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET app_sent_at = CURRENT_TIMESTAMP(6) WHERE ride_id = ? AND app_sent_at IS NULL ORDER BY created_at ASC LIMIT 1`, response.RideID)
 	if err != nil {
@@ -918,12 +911,6 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 			}
 			fmt.Fprintf(w, "data: %s\n", sb.String())
 			flusher.Flush()
-			slog.Info("Sent notification to app2",
-				slog.String("ride_id", response.RideID),
-				slog.String("user_id", user.ID),
-				slog.String("status", response.Status),
-				slog.String("response", sb.String()),
-			)
 
 			_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET app_sent_at = CURRENT_TIMESTAMP(6) WHERE ride_id = ? AND app_sent_at IS NULL ORDER BY created_at ASC LIMIT 1`, response.RideID)
 			if err != nil {
