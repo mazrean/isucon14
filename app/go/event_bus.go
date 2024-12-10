@@ -12,6 +12,7 @@ type RideEvent struct {
 	status     string
 	evaluation int
 	chairID    string
+	rideID     string
 	updatedAt  time.Time
 }
 

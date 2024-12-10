@@ -148,9 +148,10 @@ HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0
 			return
 		}
 
-		Publish(a.rideID, &RideEvent{
+		Publish(a.chairID, &RideEvent{
 			status:  "MATCHED",
 			chairID: a.chairID,
+			rideID:  a.rideID,
 		})
 	}
 

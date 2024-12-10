@@ -485,9 +485,10 @@ func appPostRides(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rideStatusesCache.Forget(rideID)
-	Publish(rideID, &RideEvent{
+	Publish(ride.ChairID.String, &RideEvent{
 		status:    "MATCHING",
 		updatedAt: now,
+		rideID:    rideID,
 	})
 
 	writeJSON(w, http.StatusAccepted, &appPostRidesResponse{
@@ -687,10 +688,11 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 
 	rideStatusesCache.Forget(rideID)
 
-	Publish(rideID, &RideEvent{
+	Publish(ride.ChairID.String, &RideEvent{
 		status:     "COMPLETED",
 		evaluation: req.Evaluation,
 		updatedAt:  now,
+		rideID:     rideID,
 	})
 
 	writeJSON(w, http.StatusOK, &appPostRideEvaluationResponse{
@@ -819,7 +821,7 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ch := make(chan *RideEvent, 100)
-	Subscribe(ride.ID, ch)
+	Subscribe(response.Chair.ID, ch)
 	for {
 		select {
 		case <-ctx.Done():

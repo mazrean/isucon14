@@ -191,8 +191,9 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 
 	rideStatusesCache.Forget(ride.ID)
 	if newStatus != "" {
-		Publish(ride.ID, &RideEvent{
+		Publish(chair.ID, &RideEvent{
 			status: newStatus,
+			rideID: ride.ID,
 		})
 	}
 
@@ -304,23 +305,62 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ch := make(chan *RideEvent, 100)
-	Subscribe(ride.ID, ch)
+	Subscribe(chair.ID, ch)
 	for {
 		select {
 		case <-r.Context().Done():
 			return
 		case event := <-ch:
 			if event.status == "MATCHED" {
-				continue
-			}
+				if err := db.GetContext(ctx, ride, `SELECT * FROM rides WHERE id = ?`, event.rideID); err != nil {
+					if errors.Is(err, sql.ErrNoRows) {
+						writeJSON(w, http.StatusOK, &chairGetNotificationResponse{
+							RetryAfterMs: 100,
+						})
+						return
+					}
+					writeError(w, r, http.StatusInternalServerError, err)
+					return
+				}
 
-			status, err := getLatestRideStatusWithID(ctx, db, ride.ID)
-			if err != nil {
-				writeError(w, r, http.StatusInternalServerError, err)
-				return
-			}
+				status, err := getLatestRideStatusWithID(ctx, db, ride.ID)
+				if err != nil {
+					writeError(w, r, http.StatusInternalServerError, err)
+					return
+				}
 
-			response.Status = event.status
+				user := &User{}
+				err = db.GetContext(ctx, user, "SELECT * FROM users WHERE id = ?", ride.UserID)
+				if err != nil {
+					writeError(w, r, http.StatusInternalServerError, err)
+					return
+				}
+
+				response = &chairGetNotificationResponseData{
+					RideID: ride.ID,
+					User: simpleUser{
+						ID:   user.ID,
+						Name: fmt.Sprintf("%s %s", user.Firstname, user.Lastname),
+					},
+					PickupCoordinate: Coordinate{
+						Latitude:  ride.PickupLatitude,
+						Longitude: ride.PickupLongitude,
+					},
+					DestinationCoordinate: Coordinate{
+						Latitude:  ride.DestinationLatitude,
+						Longitude: ride.DestinationLongitude,
+					},
+					Status: status.Status,
+				}
+			} else {
+				status, err := getLatestRideStatusWithID(ctx, db, ride.ID)
+				if err != nil {
+					writeError(w, r, http.StatusInternalServerError, err)
+					return
+				}
+
+				response.Status = status.Status
+			}
 
 			sb := &strings.Builder{}
 			err = json.NewEncoder(sb).Encode(response)
@@ -341,10 +381,6 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 			_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, status.ID)
 			if err != nil {
 				writeError(w, r, http.StatusInternalServerError, err)
-				return
-			}
-
-			if event.status == "COMPLETED" {
 				return
 			}
 		}
@@ -422,8 +458,9 @@ func chairPostRideStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	rideStatusesCache.Forget(ride.ID)
 
-	Publish(ride.ID, &RideEvent{
+	Publish(chair.ID, &RideEvent{
 		status: req.Status,
+		rideID: ride.ID,
 	})
 
 	w.WriteHeader(http.StatusNoContent)
