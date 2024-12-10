@@ -247,6 +247,8 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	initEventBus()
+
 	writeJSON(w, http.StatusOK, postInitializeResponse{Language: "go"})
 }
 
