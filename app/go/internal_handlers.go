@@ -155,37 +155,43 @@ HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0
 	// chairsを可変なsliceとして扱えるようにする
 	availableChairs := chairs
 
-	table := make([][]float64, 0, len(rides))
 	for _, ride := range rides {
-		row := make([]float64, 0, len(availableChairs))
-		for _, chair := range availableChairs {
-			location, ok := chairLocationCache.Load(chair.ID)
+		if len(availableChairs) == 0 {
+			break // 椅子がもう無い
+		}
+
+		// rideに対して最も近いchairを探す
+		bestIdx := -1
+		bestDist := math.MaxFloat64
+		for i, ch := range availableChairs {
+			location, ok := chairLocationCache.Load(ch.ID)
 			if !ok {
 				continue
 			}
 
-			dist := float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, location.LastLatitude, location.LastLongitude)+manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude)) / float64(chairModelSpeedCache[chair.Model])
-			row = append(row, dist)
-		}
-		table = append(table, row)
-	}
-
-	_, assignmentResults := HungarianAlgorithm(table)
-
-	for i, ride := range rides {
-		if assignmentResults[i] >= len(availableChairs) || assignmentResults[i] < 0 {
-			continue
+			dist := float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, location.LastLatitude, location.LastLongitude)+manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude)) / float64(chairModelSpeedCache[ch.Model])
+			if dist < bestDist {
+				bestDist = dist
+				bestIdx = i
+			}
 		}
 
-		assignments = append(assignments, struct {
-			chairID string
-			rideID  string
-			userID  string
-		}{
-			chairID: availableChairs[assignmentResults[i]].ID,
-			rideID:  ride.ID,
-			userID:  ride.UserID,
-		})
+		// 最適な椅子が見つかったら割り当て
+		if bestIdx >= 0 {
+			assignments = append(assignments, struct {
+				chairID string
+				rideID  string
+				userID  string
+			}{
+				chairID: availableChairs[bestIdx].ID,
+				rideID:  ride.ID,
+				userID:  ride.UserID,
+			})
+
+			// 使用済みの椅子をリストから除去(末尾とスワップして削除する)
+			availableChairs[bestIdx] = availableChairs[len(availableChairs)-1]
+			availableChairs = availableChairs[:len(availableChairs)-1]
+		}
 	}
 
 	// 割当がなかった場合
@@ -219,279 +225,4 @@ HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0
 	}
 
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// Infinity は無限大を表します。
-var InfinityFloat = math.Inf(1)
-
-// Hungarian はハンガリアン・アルゴリズムの構造体です。
-type Hungarian struct {
-	n      int
-	matrix [][]float64
-	labelX []float64
-	labelY []float64
-	xy     []int
-	yx     []int
-	S      []bool
-	T      []bool
-	Slack  []float64
-	Slackx []int
-	prev   []int
-}
-
-// NewHungarian は新しいHungarian構造体を初期化します。
-func NewHungarian(costMatrix [][]float64) *Hungarian {
-	rows := len(costMatrix)
-	cols := len(costMatrix[0])
-
-	// 行列を正方行列に拡張
-	n := max(rows, cols)
-	squareMatrix := make([][]float64, n)
-	for i := 0; i < n; i++ {
-		squareMatrix[i] = make([]float64, n)
-		for j := 0; j < n; j++ {
-			if i < rows && j < cols {
-				squareMatrix[i][j] = costMatrix[i][j]
-			} else {
-				// ダミー行・列のコストを0に設定
-				squareMatrix[i][j] = 0.0
-			}
-		}
-	}
-
-	h := &Hungarian{
-		n:      n,
-		matrix: squareMatrix,
-		labelX: make([]float64, n),
-		labelY: make([]float64, n),
-		xy:     make([]int, n),
-		yx:     make([]int, n),
-		S:      make([]bool, n),
-		T:      make([]bool, n),
-		Slack:  make([]float64, n),
-		Slackx: make([]int, n),
-		prev:   make([]int, n),
-	}
-
-	// 初期ラベル設定
-	for x := 0; x < n; x++ {
-		h.labelX[x] = h.minInRow(x)
-	}
-	for y := 0; y < n; y++ {
-		h.labelY[y] = h.minInCol(y)
-	}
-
-	// 初期マッチングの作成
-	for x := 0; x < n; x++ {
-		for y := 0; y < n; y++ {
-			if h.matrix[x][y] == h.labelX[x]+h.labelY[y] && h.yx[y] == -1 {
-				h.xy[x] = y
-				h.yx[y] = x
-				break
-			}
-		}
-	}
-
-	// 初期化: -1 は未マッチを示す
-	for i := range h.xy {
-		if h.xy[i] == 0 && !h.isMatched(i) {
-			h.xy[i] = -1
-		}
-	}
-
-	return h
-}
-
-// minInRow は指定された行の最小値を返します。
-func (h *Hungarian) minInRow(x int) float64 {
-	min := InfinityFloat
-	for y := 0; y < h.n; y++ {
-		if h.matrix[x][y] < min {
-			min = h.matrix[x][y]
-		}
-	}
-	return min
-}
-
-// minInCol は指定された列の最小値を返します。
-func (h *Hungarian) minInCol(y int) float64 {
-	min := InfinityFloat
-	for x := 0; x < h.n; x++ {
-		if h.matrix[x][y] < min {
-			min = h.matrix[x][y]
-		}
-	}
-	return min
-}
-
-// isMatched は列yがマッチしているかを返します。
-func (h *Hungarian) isMatched(y int) bool {
-	return h.yx[y] != -1
-}
-
-// Execute はハンガリアン・アルゴリズムを実行します。
-func (h *Hungarian) Execute() {
-	for {
-		// S, T, Slack, prev を初期化
-		h.S = make([]bool, h.n)
-		h.T = make([]bool, h.n)
-		for j := 0; j < h.n; j++ {
-			h.Slack[j] = InfinityFloat
-		}
-		for i := 0; i < h.n; i++ {
-			h.prev[i] = -1
-		}
-
-		// 初期の未マッチの行を探す
-		root := -1
-		for x := 0; x < h.n; x++ {
-			if h.xy[x] == -1 {
-				root = x
-				h.S[x] = true
-				for y := 0; y < h.n; y++ {
-					if h.labelX[x]+h.labelY[y]-h.matrix[x][y] < h.Slack[y] {
-						h.Slack[y] = h.labelX[x] + h.labelY[y] - h.matrix[x][y]
-						h.Slackx[y] = x
-					}
-				}
-				break
-			}
-		}
-
-		if root == -1 {
-			break // 全てマッチしている
-		}
-
-		// BFS用のキュー
-		queue := []int{root}
-		found := false
-		var x, y int
-
-		for len(queue) > 0 && !found {
-			x = queue[0]
-			queue = queue[1:]
-
-			for y = 0; y < h.n; y++ {
-				if h.matrix[x][y] == h.labelX[x]+h.labelY[y] && !h.T[y] {
-					if h.yx[y] == -1 {
-						// 増加パスを見つけた
-						found = true
-						h.prev[x] = y
-						break
-					}
-					h.T[y] = true
-					queue = append(queue, h.yx[y])
-					h.S[h.yx[y]] = true
-					for j := 0; j < h.n; j++ {
-						if h.labelX[h.yx[y]]+h.labelY[j]-h.matrix[h.yx[y]][j] < h.Slack[j] {
-							h.Slack[j] = h.labelX[h.yx[y]] + h.labelY[j] - h.matrix[h.yx[y]][j]
-							h.Slackx[j] = h.yx[y]
-						}
-					}
-				}
-			}
-		}
-
-		if found {
-			// 増加パスをたどってマッチングを更新
-			x, y = h.prev[x], y
-			for {
-				prevY := h.xy[x]
-				h.xy[x] = y
-				h.yx[y] = x
-				if prevY == -1 {
-					break
-				}
-				x = h.prev[h.yx[prevY]]
-				y = prevY
-			}
-		} else {
-			// ラベルを調整
-			delta := InfinityFloat
-			for j := 0; j < h.n; j++ {
-				if !h.T[j] && h.Slack[j] < delta {
-					delta = h.Slack[j]
-				}
-			}
-
-			for i := 0; i < h.n; i++ {
-				if h.S[i] {
-					h.labelX[i] -= delta
-				}
-			}
-			for j := 0; j < h.n; j++ {
-				if h.T[j] {
-					h.labelY[j] += delta
-				} else {
-					h.Slack[j] -= delta
-				}
-			}
-
-			// 再探索
-			for j := 0; j < h.n; j++ {
-				if !h.T[j] && h.Slack[j] == 0 {
-					if h.yx[j] == -1 {
-						// 増加パスを見つけた
-						x = h.Slackx[j]
-						y = j
-						found = true
-						break
-					} else {
-						h.T[j] = true
-						queue = append(queue, h.yx[j])
-						h.S[h.yx[j]] = true
-						for k := 0; k < h.n; k++ {
-							if h.labelX[h.yx[j]]+h.labelY[k]-h.matrix[h.yx[j]][k] < h.Slack[k] {
-								h.Slack[k] = h.labelX[h.yx[j]] + h.labelY[k] - h.matrix[h.yx[j]][k]
-								h.Slackx[k] = h.yx[j]
-							}
-						}
-					}
-				}
-			}
-
-			if found {
-				// 増加パスをたどってマッチングを更新
-				x = h.Slackx[y]
-				for {
-					prevY := h.xy[x]
-					h.xy[x] = y
-					h.yx[y] = x
-					if prevY == -1 {
-						break
-					}
-					x = h.Slackx[prevY]
-					y = prevY
-				}
-			}
-		}
-	}
-}
-
-// HungarianAlgorithm はハンガリアン・アルゴリズムを実装します。
-// costMatrix は割り当てコストの行列（非正方行列も可）です。
-// 戻り値は最小コストと割り当て結果のスライスです。
-func HungarianAlgorithm(costMatrix [][]float64) (float64, []int) {
-	matcher := NewHungarian(costMatrix)
-	matcher.Execute()
-
-	rows := len(costMatrix)
-	cols := len(costMatrix[0])
-	n := matcher.n
-
-	totalCost := 0.0
-	assignment := make([]int, rows)
-	for i := 0; i < rows; i++ {
-		assignment[i] = -1
-	}
-
-	for x := 0; x < n; x++ {
-		y := matcher.xy[x]
-		if x < rows && y < cols {
-			assignment[x] = y
-			totalCost += costMatrix[x][y]
-		}
-	}
-
-	return totalCost, assignment
 }
