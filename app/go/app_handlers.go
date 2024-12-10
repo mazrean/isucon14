@@ -1068,7 +1068,7 @@ NEAR_BY_LOOP:
 					writeError(w, r, http.StatusInternalServerError, fmt.Errorf("status not found for ride ID: %s", ride.ID))
 					return
 				}
-				if status != "COMPLETED" {
+				if status != "COMPLETED" && status != "MATCHING" {
 					slog.Info("skip chair", slog.String("chair_id", chair.ID), slog.String("ride_id", ride.ID), slog.String("status", status))
 					continue NEAR_BY_LOOP
 				}
