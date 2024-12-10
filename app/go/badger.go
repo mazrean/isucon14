@@ -98,10 +98,11 @@ func initBadger() error {
 		ChairID string `db:"chair_id"`
 		Status  string `db:"status"`
 	}
-	if err := db.Select(&chairStatuses, `SELECT rides.chair_id, rs.status, rs.created_at
+	if err := db.Select(&chairStatuses, `SELECT rides.chair_id, rs.status
 		FROM rides
 		JOIN ride_statuses as rs ON rides.id = rs.ride_id
-		WHERE rs.created_at = (SELECT MAX(rs2.created_at) FROM ride_statuses as rs2 WHERE rs2.ride_id = rides.id) ORDER BY rs.created_at ASC`); err != nil {
+		WHERE rs.created_at = (SELECT MAX(rs2.created_at) FROM ride_statuses as rs2 WHERE rs2.ride_id = rides.id)
+		ORDER BY rs.created_at`); err != nil {
 		return fmt.Errorf("failed to select chair statuses: %w", err)
 	}
 
