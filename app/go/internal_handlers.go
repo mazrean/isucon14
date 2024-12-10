@@ -104,7 +104,7 @@ HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0
 }
 
 func init() {
-	ticker := time.NewTicker(100 * time.Millisecond)
+	ticker := time.NewTicker(300 * time.Millisecond)
 	go func() {
 		for range ticker.C {
 			isChairExist := func() bool {
