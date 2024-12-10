@@ -776,7 +776,7 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 	sb := &strings.Builder{}
 	err = json.NewEncoder(sb).Encode(response)
 	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, fmt.Errorf("failed to encode response(%+v): %w", response, err))
+		writeError(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	fmt.Fprintf(w, "data: %s\n", sb.String())
@@ -823,7 +823,7 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 			sb := &strings.Builder{}
 			err = json.NewEncoder(sb).Encode(response)
 			if err != nil {
-				writeError(w, r, http.StatusInternalServerError, fmt.Errorf("failed to encode response(%+v): %w", response, err))
+				writeError(w, r, http.StatusInternalServerError, err)
 				return
 			}
 			fmt.Fprintf(w, "data: %s\n", sb.String())
@@ -924,7 +924,9 @@ func getChairStats(ctx context.Context, tx *sqlx.DB, chairID string) (appGetNoti
 	}
 
 	stats.TotalRidesCount = totalRideCount
-	stats.TotalEvaluation = totalEvaluation
+	if totalRideCount > 0 {
+		stats.TotalEvaluation = totalEvaluation
+	}
 
 	return stats, nil
 }
