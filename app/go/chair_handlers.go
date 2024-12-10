@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	isucache "github.com/mazrean/isucon-go-tools/v2/cache"
 	isuhttp "github.com/mazrean/isucon-go-tools/v2/http"
 	"github.com/oklog/ulid/v2"
 )
@@ -129,6 +130,8 @@ func chairPostActivity(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+var latestRideCache = isucache.NewAtomicMap[string, *Ride]("latestRideCache")
+
 type chairPostCoordinateResponse struct {
 	RecordedAt int64 `json:"recorded_at"`
 }
@@ -153,13 +156,11 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 
 	var newStatus *RideStatus
-	ride := &Ride{}
-	if err := tx.GetContext(ctx, ride, `SELECT * FROM rides WHERE chair_id = ? ORDER BY updated_at DESC LIMIT 1`, chair.ID); err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
-			writeError(w, r, http.StatusInternalServerError, err)
-			return
-		}
-	} else {
+	var (
+		ride *Ride
+		ok   bool
+	)
+	if ride, ok = latestRideCache.Load(chair.ID); ok {
 		status, err := getLatestRideStatus(ctx, tx, ride.ID)
 		if err != nil {
 			writeError(w, r, http.StatusInternalServerError, err)

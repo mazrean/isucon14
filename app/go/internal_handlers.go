@@ -202,6 +202,7 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 		chairID string
 		rideID  string
 		userID  string
+		ride    *Ride
 	}
 
 	// chairsを可変なsliceとして扱えるようにする
@@ -238,10 +239,12 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 				chairID string
 				rideID  string
 				userID  string
+				ride    *Ride
 			}{
 				chairID: availableChairs[bestIdx].ID,
 				rideID:  ride.ID,
 				userID:  ride.UserID,
+				ride:    &ride,
 			})
 
 			// 使用済みの椅子をリストから除去(末尾とスワップして削除する)
@@ -273,6 +276,7 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 			chairID: a.chairID,
 			rideID:  a.rideID,
 		})
+		latestRideCache.Store(a.chairID, a.ride)
 		matchedChairIDMap[a.chairID] = struct{}{}
 	}
 
