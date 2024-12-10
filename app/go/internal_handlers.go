@@ -136,6 +136,16 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 		emptyChairs = []*Chair{}
 	}()
 
+	chairMap := map[string]*Chair{}
+	for _, ch := range chairs {
+		chairMap[ch.ID] = ch
+	}
+
+	chairs = chairs[:0]
+	for _, ch := range chairMap {
+		chairs = append(chairs, ch)
+	}
+
 	if len(chairs) == 0 {
 		// 空き椅子なし
 		w.WriteHeader(http.StatusNoContent)
