@@ -20,7 +20,7 @@ var (
 func main() {
 	mux := http.NewServeMux()
 	isuhttp.ServerMuxHandleFunc(mux, "POST /payments", handlePostPayments)
-	http.ListenAndServe(":12345", mux)
+	isuhttp.ListenAndServe(":12345", mux)
 }
 
 type PostPaymentsRequest struct {
