@@ -206,6 +206,18 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 
 	if newStatus != nil {
 		rideStatusesCache.Store(ride.ID, newStatus)
+		var badgerStatus rideStatus
+		switch newStatus.Status {
+		case "PICKUP":
+			badgerStatus = rideStatusPickUp
+		case "ARRIVED":
+			badgerStatus = rideStatusArrived
+		}
+		if err := updateChairStatusToBadger(chair.ID, badgerStatus); err != nil {
+			writeError(w, r, http.StatusInternalServerError, err)
+			return
+		}
+
 		ChairPublish(chair.ID, &RideEvent{
 			status: newStatus.Status,
 			rideID: ride.ID,
@@ -477,6 +489,18 @@ func chairPostRideStatus(w http.ResponseWriter, r *http.Request) {
 		ID:     statusID,
 		Status: req.Status,
 	})
+
+	var badgerStatus rideStatus
+	switch req.Status {
+	case "ENROUTE":
+		badgerStatus = rideStatusEnRoute
+	case "CARRYING":
+		badgerStatus = rideStatusCarrying
+	}
+	if err := updateChairStatusToBadger(chair.ID, badgerStatus); err != nil {
+		writeError(w, r, http.StatusInternalServerError, err)
+		return
+	}
 
 	ChairPublish(chair.ID, &RideEvent{
 		status: req.Status,

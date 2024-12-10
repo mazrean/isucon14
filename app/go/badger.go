@@ -94,6 +94,48 @@ func initBadger() error {
 		return fmt.Errorf("failed to update badger: %w", err)
 	}
 
+	var chairStatuses []struct {
+		ChairID string `db:"chair_id"`
+		Status  string `db:"status"`
+	}
+	if err := db.Select(&chairStatuses, `SELECT rides.chair_id, rs2.status, rs2.created_at
+		FROM rides
+		JOIN ride_statuses as rs ON rides.id = rs.ride_id
+		WHERE rs.created_at = (SELECT MAX(rs2.created_at) FROM ride_statuses as rs2 WHERE rs2.ride_id = rides.id) ORDER BY rs.created_at ASC`); err != nil {
+		return fmt.Errorf("failed to select chair statuses: %w", err)
+	}
+
+	chairStatusMap := make(map[string]rideStatus)
+	for _, status := range chairStatuses {
+		var statusByte rideStatus
+		switch status.Status {
+		case "MATCHED":
+			statusByte = rideStatusMatching
+		case "ENROUTE":
+			statusByte = rideStatusEnRoute
+		case "PICKUP":
+			statusByte = rideStatusPickUp
+		case "CARRYING":
+			statusByte = rideStatusCarrying
+		case "ARRIVED":
+			statusByte = rideStatusArrived
+		case "COMPLETED":
+			statusByte = rideStatusCompleted
+		}
+		chairStatusMap[status.ChairID] = statusByte
+	}
+
+	err = badgerDB.Update(func(txn *badger.Txn) error {
+		for chairID, status := range chairStatusMap {
+			bytesChairID := append([]byte("status"), []byte(chairID)...)
+			err = txn.Set(bytesChairID, []byte{byte(status)})
+			if err != nil {
+				return fmt.Errorf("failed to set one time token: %w", err)
+			}
+		}
+		return nil
+	})
+
 	return nil
 }
 
@@ -189,6 +231,67 @@ func updateChairLocationToBadger(chairID string, coodinate *Coordinate) error {
 		}
 
 		err = txn.Set(bytesChairID, encodeChairLocation(&location))
+		if err != nil {
+			return fmt.Errorf("failed to set one time token: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update badger: %w", err)
+	}
+
+	return nil
+}
+
+type rideStatus byte
+
+const (
+	rideStatusMatching rideStatus = iota
+	rideStatusEnRoute
+	rideStatusPickUp
+	rideStatusCarrying
+	rideStatusArrived
+	rideStatusCompleted
+)
+
+func getChairStatusFromBadger(chairID string) (rideStatus, bool, error) {
+	var (
+		status rideStatus
+		ok     bool
+	)
+	err := badgerDB.View(func(txn *badger.Txn) error {
+		bytesChairID := append([]byte("status"), []byte(chairID)...)
+		item, err := txn.Get(bytesChairID)
+		if errors.Is(err, badger.ErrKeyNotFound) {
+			ok = false
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("failed to get item: %w", err)
+		}
+
+		ok = true
+		err = item.Value(func(val []byte) error {
+			status = rideStatus(val[0])
+			return nil
+		})
+		if err != nil {
+			return fmt.Errorf("failed to get value: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, false, fmt.Errorf("failed to view badger: %w", err)
+	}
+
+	return status, ok, nil
+}
+
+func updateChairStatusToBadger(chairID string, status rideStatus) error {
+	err := badgerDB.Update(func(txn *badger.Txn) error {
+		bytesChairID := append([]byte("status"), []byte(chairID)...)
+		err := txn.Set(bytesChairID, []byte{byte(status)})
 		if err != nil {
 			return fmt.Errorf("failed to set one time token: %w", err)
 		}

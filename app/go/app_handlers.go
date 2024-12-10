@@ -685,6 +685,11 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 		Status: "COMPLETED",
 	})
 
+	if err := updateChairStatusToBadger(ride.ChairID.String, rideStatusCompleted); err != nil {
+		writeError(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
 	ChairPublish(ride.ChairID.String, &RideEvent{
 		status:     "COMPLETED",
 		evaluation: req.Evaluation,
@@ -1088,46 +1093,20 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 		chairIDs[i] = chair.ID
 	}
 
-	// Fetch all rides for all chairs
-	rides := []*Ride{}
-	query, args, err := sqlx.In(`SELECT * FROM rides WHERE chair_id IN (?) ORDER BY created_at DESC`, chairIDs)
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
-		return
-	}
-	query = tx.Rebind(query)
-	err = tx.SelectContext(ctx, &rides, query, args...)
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
-		return
-	}
-
-	// Group rides by chair_id
-	rideMap := make(map[string][]*Ride)
-	for _, ride := range rides {
-		rideMap[ride.ChairID.String] = append(rideMap[ride.ChairID.String], ride)
-	}
-
 	nearbyChairs := []appGetNearbyChairsResponseChair{}
+NEAR_BY_LOOP:
 	for _, chair := range chairs {
 		// Check rides for this chair
-		skip := false
-		if chairRides, exists := rideMap[chair.ID]; exists {
-			for _, ride := range chairRides {
-				// 過去にライドが存在し、かつ、それが完了していない場合はスキップ
-				status, exists := rideStatusesCache.Load(ride.ID)
-				if !exists {
-					writeError(w, r, http.StatusInternalServerError, fmt.Errorf("status not found for ride ID: %s", ride.ID))
-					return
-				}
-				if status.Status != "COMPLETED" {
-					skip = true
-					break
-				}
-			}
+		status, exists, err := getChairStatusFromBadger(chair.ID)
+		if err != nil {
+			writeError(w, r, http.StatusInternalServerError, err)
+			return
 		}
-		if skip {
-			continue
+
+		if exists {
+			if status != rideStatusCompleted {
+				continue NEAR_BY_LOOP
+			}
 		}
 
 		// Get the latest ChairLocation
