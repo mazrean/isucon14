@@ -1077,7 +1077,6 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 		}
 
 		compoletedChairs = append(compoletedChairs, &chair)
-
 	}
 
 	nearbyChairs := []appGetNearbyChairsResponseChair{}

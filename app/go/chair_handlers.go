@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -114,18 +115,14 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
+	now := time.Now()
+
 	chairLocationID := ulid.Make().String()
 	if _, err := tx.ExecContext(
 		ctx,
-		`INSERT INTO chair_locations (id, chair_id, latitude, longitude) VALUES (?, ?, ?, ?)`,
-		chairLocationID, chair.ID, req.Latitude, req.Longitude,
+		`INSERT INTO chair_locations (id, chair_id, latitude, longitude, created_at) VALUES (?, ?, ?, ?, ?)`,
+		chairLocationID, chair.ID, req.Latitude, req.Longitude, now,
 	); err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
-		return
-	}
-
-	location := &ChairLocation{}
-	if err := tx.GetContext(ctx, location, `SELECT * FROM chair_locations WHERE id = ?`, chairLocationID); err != nil {
 		writeError(w, r, http.StatusInternalServerError, err)
 		return
 	}
@@ -175,14 +172,14 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 				TotalDistance:          0,
 				LastLatitude:           req.Latitude,
 				LastLongitude:          req.Longitude,
-				TotalDistanceUpdatedAt: time.Now(),
+				TotalDistanceUpdatedAt: now,
 			}, true
 		}
 		return &chairLocation{
 			TotalDistance:          cl.TotalDistance + distance(cl.LastLatitude, cl.LastLongitude, req.Latitude, req.Longitude),
 			LastLatitude:           req.Latitude,
 			LastLongitude:          req.Longitude,
-			TotalDistanceUpdatedAt: time.Now(),
+			TotalDistanceUpdatedAt: now,
 		}, true
 	})
 
@@ -194,7 +191,7 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, &chairPostCoordinateResponse{
-		RecordedAt: location.CreatedAt.UnixMilli(),
+		RecordedAt: now.UnixMilli(),
 	})
 }
 
@@ -286,6 +283,12 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Fprintf(w, "data: %s\n", sb.String())
 	flusher.Flush()
+	slog.Info("Sent notification to chair",
+		slog.String("ride_id", ride.ID),
+		slog.String("chair_id", chair.ID),
+		slog.String("user_id", user.ID),
+		slog.String("status", status),
+	)
 
 	_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE ride_id = ? AND chair_sent_at IS NULL ORDER BY created_at ASC LIMIT 1`, ride.ID)
 	if err != nil {
@@ -314,6 +317,12 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 			}
 			fmt.Fprintf(w, "data: %s\n", sb.String())
 			flusher.Flush()
+			slog.Info("Sent notification to chair",
+				slog.String("ride_id", ride.ID),
+				slog.String("chair_id", chair.ID),
+				slog.String("user_id", user.ID),
+				slog.String("status", status),
+			)
 
 			_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE ride_id = ? AND chair_sent_at IS NULL ORDER BY created_at ASC LIMIT 1`, ride.ID)
 			if err != nil {
