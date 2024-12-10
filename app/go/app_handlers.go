@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -1031,9 +1030,9 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Collect all chair IDs
-	chairIDs := make([]string, 0, len(chairs))
-	for _, chair := range chairs {
-		chairIDs = append(chairIDs, chair.ID)
+	chairIDs := make([]string, len(chairs))
+	for i, chair := range chairs {
+		chairIDs[i] = chair.ID
 	}
 
 	// Fetch all rides for all chairs
@@ -1055,7 +1054,6 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 	for _, ride := range rides {
 		rideMap[ride.ChairID.String] = append(rideMap[ride.ChairID.String], ride)
 	}
-
 	compoletedChairs := []*Chair{}
 	for _, chair := range chairs {
 		// Check rides for this chair
@@ -1101,19 +1099,6 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 	}
-	logItems := []any{}
-	for i, chair := range nearbyChairs {
-		logItems = append(logItems,
-			slog.Group(strconv.Itoa(i),
-				slog.String("chair_id", chair.ID),
-				slog.String("chair_name", chair.Name),
-				slog.String("chair_model", chair.Model),
-				slog.Int("chair_latitude", chair.CurrentCoordinate.Latitude),
-				slog.Int("chair_longitude", chair.CurrentCoordinate.Longitude),
-			),
-		)
-	}
-	slog.Info("nearbyChairs", logItems...)
 
 	retrievedAt := time.Now()
 
