@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -980,6 +981,8 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	reqID := ulid.MustNew(ulid.Now(), rand.Reader).String()
+
 	lat, err := strconv.Atoi(latStr)
 	if err != nil {
 		writeError(w, r, http.StatusBadRequest, errors.New("latitude is invalid"))
@@ -1056,7 +1059,7 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 		rideMap[ride.ChairID.String] = append(rideMap[ride.ChairID.String], ride)
 	}
 
-	compoletedChairs := []*Chair{}
+	completedChairs := []*Chair{}
 NEAR_BY_LOOP:
 	for _, chair := range chairs {
 		// Check rides for this chair
@@ -1069,17 +1072,26 @@ NEAR_BY_LOOP:
 					return
 				}
 				if status != "COMPLETED" {
-					slog.Info("skip chair", slog.String("chair_id", chair.ID), slog.String("ride_id", ride.ID), slog.String("status", status))
+					slog.Info("skip chair",
+						slog.String("req_id", reqID),
+						slog.String("chair_id", chair.ID),
+						slog.String("ride_id", ride.ID),
+						slog.String("status", status),
+					)
 					continue NEAR_BY_LOOP
 				}
 			}
 		}
 
-		compoletedChairs = append(compoletedChairs, &chair)
+		slog.Info("add chair",
+			slog.String("req_id", reqID),
+			slog.String("chair_id", chair.ID),
+		)
+		completedChairs = append(completedChairs, &chair)
 	}
 
 	nearbyChairs := []appGetNearbyChairsResponseChair{}
-	for _, chair := range compoletedChairs {
+	for _, chair := range completedChairs {
 		// Get the latest ChairLocation
 		chairLocation, exists := chairLocationCache.Load(chair.ID)
 		if !exists {
@@ -1099,11 +1111,12 @@ NEAR_BY_LOOP:
 		}
 	}
 	logItems := []any{
+		slog.String("req_id", reqID),
 		slog.Int("lat", lat),
 		slog.Int("lon", lon),
 		slog.Int("distance", distance),
 		slog.Int("nearby_chairs_count", len(nearbyChairs)),
-		slog.Int("completed_chairs_count", len(compoletedChairs)),
+		slog.Int("completed_chairs_count", len(completedChairs)),
 		slog.Int("active_chairs_count", len(chairs)),
 	}
 	for i, chair := range nearbyChairs {
