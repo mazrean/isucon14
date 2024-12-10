@@ -2,11 +2,9 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/oklog/ulid/v2"
@@ -221,12 +219,6 @@ type chairGetNotificationResponseData struct {
 }
 
 func chairGetNotification(w http.ResponseWriter, r *http.Request) {
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		writeError(w, r, http.StatusInternalServerError, errors.New("expected http.ResponseWriter to be an http.Flusher"))
-		return
-	}
-
 	ctx := r.Context()
 	chair := ctx.Value("chair").(*Chair)
 
@@ -273,23 +265,6 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := &chairGetNotificationResponseData{
-		RideID: ride.ID,
-		User: simpleUser{
-			ID:   user.ID,
-			Name: fmt.Sprintf("%s %s", user.Firstname, user.Lastname),
-		},
-		PickupCoordinate: Coordinate{
-			Latitude:  ride.PickupLatitude,
-			Longitude: ride.PickupLongitude,
-		},
-		DestinationCoordinate: Coordinate{
-			Latitude:  ride.DestinationLatitude,
-			Longitude: ride.DestinationLongitude,
-		},
-		Status: status,
-	}
-
 	if yetSentRideStatus.ID != "" {
 		_, err := tx.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, yetSentRideStatus.ID)
 		if err != nil {
@@ -298,52 +273,30 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no")
-
-	sb := &strings.Builder{}
-	err = json.NewEncoder(sb).Encode(response)
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, fmt.Errorf("failed to encode response: %w", err))
-		return
-	}
-	fmt.Fprintf(w, "data: %s\n", sb.String())
-	flusher.Flush()
-
 	if err := tx.Commit(); err != nil {
 		writeError(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	ch := make(chan *RideEvent, 100)
-	Subscribe(ride.ID, ch)
-	for {
-		select {
-		case <-r.Context().Done():
-			return
-		case event := <-ch:
-			if event.status == "MATCHED" {
-				continue
-			}
-
-			response.Status = event.status
-
-			sb.Reset()
-			err = json.NewEncoder(sb).Encode(response)
-			if err != nil {
-				writeError(w, r, http.StatusInternalServerError, fmt.Errorf("failed to encode response: %w", err))
-				return
-			}
-			fmt.Fprintf(w, "data: %s\n", sb.String())
-			flusher.Flush()
-
-			if event.status == "COMPLETED" {
-				return
-			}
-		}
-	}
+	writeJSON(w, http.StatusOK, &chairGetNotificationResponse{
+		Data: &chairGetNotificationResponseData{
+			RideID: ride.ID,
+			User: simpleUser{
+				ID:   user.ID,
+				Name: fmt.Sprintf("%s %s", user.Firstname, user.Lastname),
+			},
+			PickupCoordinate: Coordinate{
+				Latitude:  ride.PickupLatitude,
+				Longitude: ride.PickupLongitude,
+			},
+			DestinationCoordinate: Coordinate{
+				Latitude:  ride.DestinationLatitude,
+				Longitude: ride.DestinationLongitude,
+			},
+			Status: status,
+		},
+		RetryAfterMs: 100,
+	})
 }
 
 type postChairRidesRideIDStatusRequest struct {

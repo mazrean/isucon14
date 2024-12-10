@@ -716,12 +716,6 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 
 	ride := &Ride{}
 	if err := db.GetContext(ctx, ride, `SELECT * FROM rides WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`, user.ID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			writeJSON(w, http.StatusOK, &chairGetNotificationResponse{
-				RetryAfterMs: 100,
-			})
-			return
-		}
 		writeError(w, r, http.StatusInternalServerError, err)
 		return
 	}
