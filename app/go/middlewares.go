@@ -106,6 +106,30 @@ func ownerAuthMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+var chairAccessTokenCache *sc.Cache[string, *Chair]
+
+func init() {
+	var err error
+	chairAccessTokenCache, err = isucache.New[string, *Chair](
+		"chairAccessTokenCache",
+		func(ctx context.Context, key string) (*Chair, error) {
+			chair := &Chair{}
+			err = db.GetContext(ctx, chair, "SELECT * FROM chairs WHERE access_token = ?", key)
+			if err != nil {
+				return nil, err
+			}
+			return chair, nil
+		},
+		5*time.Minute,  // freshFor
+		10*time.Minute, // ttl
+		sc.WithCleanupInterval(1*time.Minute),
+	)
+	if err != nil {
+		// Handle cache initialization error appropriately
+		panic(err)
+	}
+}
+
 func chairAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -115,8 +139,7 @@ func chairAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		accessToken := c.Value
-		chair := &Chair{}
-		err = db.GetContext(ctx, chair, "SELECT * FROM chairs WHERE access_token = ?", accessToken)
+		chair, err := chairAccessTokenCache.Get(ctx, accessToken)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				writeError(w, r, http.StatusUnauthorized, errors.New("invalid access token"))
