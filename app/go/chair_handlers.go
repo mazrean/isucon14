@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -112,6 +113,9 @@ func chairPostActivity(w http.ResponseWriter, r *http.Request) {
 				defer emptyChairsLocker.Unlock()
 
 				emptyChairs = append(emptyChairs, chair)
+				slog.Info("chair is added to empty chairs in postActivity",
+					slog.String("chair_id", chair.ID),
+				)
 			}
 		} else {
 			emptyChairsLocker.Lock()
@@ -415,6 +419,9 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 					defer emptyChairsLocker.Unlock()
 
 					emptyChairs = append(emptyChairs, chair)
+					slog.Info("chair is added to empty chairs in getNotification",
+						slog.String("chair_id", chair.ID),
+					)
 				}()
 			}
 		}
