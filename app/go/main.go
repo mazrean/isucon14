@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"strconv"
 
+	"github.com/dgraph-io/badger"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-sql-driver/mysql"
@@ -26,9 +27,18 @@ func main() {
 	mux := setup()
 	slog.Info("Listening on :8080")
 
-	if err := initBadger(); err != nil {
-		panic(err)
+	err := os.MkdirAll(badgerDir, 0755)
+	if err != nil {
+		panic(fmt.Sprintf("failed to create badger directory: %v", err))
 	}
+	badgerDB, err = badger.Open(badger.DefaultOptions(badgerDir))
+	if err != nil {
+		panic(fmt.Sprintf("failed to open badger: %v", err))
+	}
+	defer badgerDB.Close()
+	defer func() {
+		badgerDB.Close()
+	}()
 
 	if err := initEmptyChairs(); err != nil {
 		panic(err)

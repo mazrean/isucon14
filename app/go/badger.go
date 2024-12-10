@@ -2,7 +2,7 @@ package main
 
 import (
 	"bytes"
-	"encoding/gob"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"os"
@@ -78,18 +78,13 @@ func initBadger() error {
 	err = badgerDB.Update(func(txn *badger.Txn) error {
 		for _, loc := range chairLocations {
 			bytesChairID := append([]byte("location"), []byte(loc.ChairID)...)
-			buf := bytes.NewBuffer(nil)
-			err := gob.NewEncoder(buf).Encode(chairLocation{
+
+			err = txn.Set(bytesChairID, encodeChairLocation(&chairLocation{
 				TotalDistance:          loc.TotalDist,
 				LastLatitude:           chairLatestLocationMap[loc.ChairID].Latitude,
 				LastLongitude:          chairLatestLocationMap[loc.ChairID].Longitude,
-				TotalDistanceUpdatedAt: loc.UpdatedAt,
-			})
-			if err != nil {
-				return fmt.Errorf("failed to encode one time token: %w", err)
-			}
-
-			err = txn.Set(bytesChairID, buf.Bytes())
+				TotalDistanceUpdatedAt: loc.UpdatedAt.UnixMilli(),
+			}))
 			if err != nil {
 				return fmt.Errorf("failed to set one time token: %w", err)
 			}
@@ -101,6 +96,33 @@ func initBadger() error {
 	}
 
 	return nil
+}
+
+type chairLocation struct {
+	TotalDistance          int   `db:"total_distance"`
+	LastLatitude           int   `db:"last_latitude"`
+	LastLongitude          int   `db:"last_longitude"`
+	TotalDistanceUpdatedAt int64 `db:"total_distance_updated_at"`
+}
+
+func encodeChairLocation(location *chairLocation) []byte {
+	buf := bytes.NewBuffer(nil)
+	binary.LittleEndian.PutUint64(buf.Next(8), uint64(location.TotalDistance))
+	binary.LittleEndian.PutUint64(buf.Next(8), uint64(location.LastLatitude))
+	binary.LittleEndian.PutUint64(buf.Next(8), uint64(location.LastLongitude))
+	binary.LittleEndian.PutUint64(buf.Next(8), uint64(location.TotalDistanceUpdatedAt))
+
+	return buf.Bytes()
+}
+
+func decodeChairLocation(data []byte) chairLocation {
+	var location chairLocation
+	location.TotalDistance = int(binary.LittleEndian.Uint64(data[:8]))
+	location.LastLatitude = int(binary.LittleEndian.Uint64(data[8:16]))
+	location.LastLongitude = int(binary.LittleEndian.Uint64(data[16:24]))
+	location.TotalDistanceUpdatedAt = int64(binary.LittleEndian.Uint64(data[24:32]))
+
+	return location
 }
 
 func getChairLocationFromBadger(chairID string) (*chairLocation, bool, error) {
@@ -121,11 +143,7 @@ func getChairLocationFromBadger(chairID string) (*chairLocation, bool, error) {
 
 		ok = true
 		err = item.Value(func(val []byte) error {
-			buf := bytes.NewBuffer(val)
-			err := gob.NewDecoder(buf).Decode(&location)
-			if err != nil {
-				return fmt.Errorf("failed to decode: %w", err)
-			}
+			location = decodeChairLocation(val)
 			return nil
 		})
 		if err != nil {
@@ -154,15 +172,11 @@ func updateChairLocationToBadger(chairID string, coodinate *Coordinate) error {
 				TotalDistance:          0,
 				LastLatitude:           coodinate.Latitude,
 				LastLongitude:          coodinate.Longitude,
-				TotalDistanceUpdatedAt: time.Now(),
+				TotalDistanceUpdatedAt: time.Now().UnixMilli(),
 			}
 		} else {
 			err = item.Value(func(val []byte) error {
-				buf := bytes.NewBuffer(val)
-				err := gob.NewDecoder(buf).Decode(&location)
-				if err != nil {
-					return fmt.Errorf("failed to decode: %w", err)
-				}
+				location = decodeChairLocation(val)
 				return nil
 			})
 			if err != nil {
@@ -172,16 +186,10 @@ func updateChairLocationToBadger(chairID string, coodinate *Coordinate) error {
 			location.TotalDistance += distance(location.LastLatitude, location.LastLongitude, coodinate.Latitude, coodinate.Longitude)
 			location.LastLatitude = coodinate.Latitude
 			location.LastLongitude = coodinate.Longitude
-			location.TotalDistanceUpdatedAt = time.Now()
+			location.TotalDistanceUpdatedAt = time.Now().UnixMilli()
 		}
 
-		buf := bytes.NewBuffer(nil)
-		err = gob.NewEncoder(buf).Encode(location)
-		if err != nil {
-			return fmt.Errorf("failed to encode one time token: %w", err)
-		}
-
-		err = txn.Set(bytesChairID, buf.Bytes())
+		err = txn.Set(bytesChairID, encodeChairLocation(&location))
 		if err != nil {
 			return fmt.Errorf("failed to set one time token: %w", err)
 		}

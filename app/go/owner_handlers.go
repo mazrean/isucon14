@@ -164,16 +164,16 @@ func calculateSale(ride Ride) int {
 }
 
 type chairWithDetail struct {
-	ID                     string       `db:"id"`
-	OwnerID                string       `db:"owner_id"`
-	Name                   string       `db:"name"`
-	AccessToken            string       `db:"access_token"`
-	Model                  string       `db:"model"`
-	IsActive               bool         `db:"is_active"`
-	CreatedAt              time.Time    `db:"created_at"`
-	UpdatedAt              time.Time    `db:"updated_at"`
-	TotalDistance          int          `db:"total_distance"`
-	TotalDistanceUpdatedAt sql.NullTime `db:"total_distance_updated_at"`
+	ID                     string        `db:"id"`
+	OwnerID                string        `db:"owner_id"`
+	Name                   string        `db:"name"`
+	AccessToken            string        `db:"access_token"`
+	Model                  string        `db:"model"`
+	IsActive               bool          `db:"is_active"`
+	CreatedAt              time.Time     `db:"created_at"`
+	UpdatedAt              time.Time     `db:"updated_at"`
+	TotalDistance          int           `db:"total_distance"`
+	TotalDistanceUpdatedAt sql.NullInt64 `db:"total_distance_updated_at"`
 }
 
 type ownerGetChairResponse struct {
@@ -188,13 +188,6 @@ type ownerGetChairResponseChair struct {
 	RegisteredAt           int64  `json:"registered_at"`
 	TotalDistance          int    `json:"total_distance"`
 	TotalDistanceUpdatedAt *int64 `json:"total_distance_updated_at,omitempty"`
-}
-
-type chairLocation struct {
-	TotalDistance          int       `db:"total_distance"`
-	LastLatitude           int       `db:"last_latitude"`
-	LastLongitude          int       `db:"last_longitude"`
-	TotalDistanceUpdatedAt time.Time `db:"total_distance_updated_at"`
 }
 
 func ownerGetChairs(w http.ResponseWriter, r *http.Request) {
@@ -229,8 +222,8 @@ FROM chairs WHERE owner_id = ?
 		}
 
 		chair.TotalDistance = location.TotalDistance
-		chair.TotalDistanceUpdatedAt = sql.NullTime{
-			Time:  location.TotalDistanceUpdatedAt,
+		chair.TotalDistanceUpdatedAt = sql.NullInt64{
+			Int64: location.TotalDistanceUpdatedAt,
 			Valid: true,
 		}
 	}
@@ -246,7 +239,7 @@ FROM chairs WHERE owner_id = ?
 			TotalDistance: chair.TotalDistance,
 		}
 		if chair.TotalDistanceUpdatedAt.Valid {
-			t := chair.TotalDistanceUpdatedAt.Time.UnixMilli()
+			t := chair.TotalDistanceUpdatedAt.Int64
 			c.TotalDistanceUpdatedAt = &t
 		}
 		res.Chairs = append(res.Chairs, c)
