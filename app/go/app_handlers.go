@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -798,6 +799,12 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 		case <-ctx.Done():
 			return
 		case event := <-ch:
+			slog.InfoContext(ctx, "event",
+				slog.String("status", event.status),
+				slog.String("ride_id", ride.ID),
+				slog.Int("evaluation", event.evaluation),
+				slog.Time("updated_at", event.updatedAt),
+			)
 			switch event.status {
 			case "MATCHING", "ENROUTE", "PICKUP", "CARRYING", "ARRIVED":
 				response.Status = event.status
