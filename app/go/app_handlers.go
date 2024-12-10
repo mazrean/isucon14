@@ -301,16 +301,16 @@ type executableGet interface {
 	GetContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error
 }
 
-var rideStatusesCache *sc.Cache[string, string]
+var rideStatusesCache *sc.Cache[string, *RideStatus]
 
 func init() {
 	var err error
-	rideStatusesCache, err = isucache.New("rideStatusesCache", func(ctx context.Context, key string) (string, error) {
-		status := ""
-		if err := db.GetContext(ctx, &status, `SELECT status FROM ride_statuses WHERE ride_id = ? ORDER BY created_at DESC LIMIT 1`, key); err != nil {
-			return "", err
+	rideStatusesCache, err = isucache.New("rideStatusesCache", func(ctx context.Context, key string) (*RideStatus, error) {
+		status := RideStatus{}
+		if err := db.GetContext(ctx, &status, `SELECT id, status FROM ride_statuses WHERE ride_id = ? ORDER BY created_at DESC LIMIT 1`, key); err != nil {
+			return nil, err
 		}
-		return status, nil
+		return &status, nil
 	}, 2*time.Second, 2*time.Second, sc.WithMapBackend(1000), sc.EnableStrictCoalescing())
 	if err != nil {
 		panic(fmt.Sprintf("failed to create rideStatusesCache: %v", err))
@@ -318,6 +318,15 @@ func init() {
 }
 
 func getLatestRideStatus(ctx context.Context, tx executableGet, rideID string) (string, error) {
+	rideStatus, err := rideStatusesCache.Get(ctx, rideID)
+	if err != nil {
+		return "", err
+	}
+
+	return rideStatus.Status, nil
+}
+
+func getLatestRideStatusWithID(ctx context.Context, tx executableGet, rideID string) (*RideStatus, error) {
 	return rideStatusesCache.Get(ctx, rideID)
 }
 

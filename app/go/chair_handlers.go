@@ -246,7 +246,7 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	status, err := getLatestRideStatus(ctx, db, ride.ID)
+	status, err := getLatestRideStatusWithID(ctx, db, ride.ID)
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, err)
 		return
@@ -273,7 +273,7 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 			Latitude:  ride.DestinationLatitude,
 			Longitude: ride.DestinationLongitude,
 		},
-		Status: status,
+		Status: status.Status,
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -297,7 +297,7 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 		slog.String("response", sb.String()),
 	)
 
-	_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE ride_id = ? AND chair_sent_at IS NULL ORDER BY created_at ASC LIMIT 1`, ride.ID)
+	_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, status.ID)
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, err)
 		return
@@ -312,6 +312,12 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 		case event := <-ch:
 			if event.status == "MATCHED" {
 				continue
+			}
+
+			status, err := getLatestRideStatusWithID(ctx, db, ride.ID)
+			if err != nil {
+				writeError(w, r, http.StatusInternalServerError, err)
+				return
 			}
 
 			response.Status = event.status
@@ -332,7 +338,7 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 				slog.String("response", sb.String()),
 			)
 
-			_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE ride_id = ? AND chair_sent_at IS NULL ORDER BY created_at ASC LIMIT 1`, ride.ID)
+			_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, status.ID)
 			if err != nil {
 				writeError(w, r, http.StatusInternalServerError, err)
 				return
