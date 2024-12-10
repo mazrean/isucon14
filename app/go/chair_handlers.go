@@ -111,15 +111,15 @@ func chairPostActivity(w http.ResponseWriter, r *http.Request) {
 				emptyChairsLocker.Lock()
 				defer emptyChairsLocker.Unlock()
 
-				emptyChairChan = append(emptyChairChan, chair)
+				emptyChairs = append(emptyChairs, chair)
 			}
 		} else {
 			emptyChairsLocker.Lock()
 			defer emptyChairsLocker.Unlock()
 
-			for i, c := range emptyChairChan {
+			for i, c := range emptyChairs {
 				if c.ID == chair.ID {
-					emptyChairChan = append(emptyChairChan[:i], emptyChairChan[i+1:]...)
+					emptyChairs = append(emptyChairs[:i], emptyChairs[i+1:]...)
 					break
 				}
 			}
@@ -394,7 +394,7 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 					emptyChairsLocker.Lock()
 					defer emptyChairsLocker.Unlock()
 
-					emptyChairChan = append(emptyChairChan, chair)
+					emptyChairs = append(emptyChairs, chair)
 				}()
 			}
 		}
