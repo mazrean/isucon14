@@ -1104,6 +1104,10 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 	logItems := []any{
 		slog.Int("lat", lat),
 		slog.Int("lon", lon),
+		slog.Int("distance", distance),
+		slog.Int("nearby_chairs_count", len(nearbyChairs)),
+		slog.Int("completed_chairs_count", len(compoletedChairs)),
+		slog.Int("active_chairs_count", len(chairs)),
 	}
 	for i, chair := range nearbyChairs {
 		logItems = append(logItems,
