@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"errors"
+	"math"
 	"net/http"
 	"time"
 
@@ -220,12 +221,26 @@ HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0
 	w.WriteHeader(http.StatusNoContent)
 }
 
-const Infinity = float64(^uint(0) >> 1)
+// Infinity は無限大を表します。
+var InfinityFloat = math.Inf(1)
 
-// HungarianAlgorithm はハンガリアン・アルゴリズムを実装します。
-// costMatrix は割り当てコストの行列（非正方行列も可）です。
-// 戻り値は最小コストと割り当て結果のペアです。
-func HungarianAlgorithm(costMatrix [][]float64) (float64, []int) {
+// Hungarian はハンガリアン・アルゴリズムの構造体です。
+type Hungarian struct {
+	n      int
+	matrix [][]float64
+	labelX []float64
+	labelY []float64
+	xy     []int
+	yx     []int
+	S      []bool
+	T      []bool
+	Slack  []float64
+	Slackx []int
+	prev   []int
+}
+
+// NewHungarian は新しいHungarian構造体を初期化します。
+func NewHungarian(costMatrix [][]float64) *Hungarian {
 	rows := len(costMatrix)
 	cols := len(costMatrix[0])
 
@@ -238,152 +253,245 @@ func HungarianAlgorithm(costMatrix [][]float64) (float64, []int) {
 			if i < rows && j < cols {
 				squareMatrix[i][j] = costMatrix[i][j]
 			} else {
-				// ダミー行・列のコストをintの最大値に設定
-				squareMatrix[i][j] = Infinity
+				// ダミー行・列のコストを0に設定
+				squareMatrix[i][j] = 0.0
 			}
 		}
 	}
 
-	// 行の最小値を引く
-	for i := 0; i < n; i++ {
-		min := squareMatrix[i][0]
-		for j := 1; j < n; j++ {
-			if squareMatrix[i][j] < min {
-				min = squareMatrix[i][j]
-			}
-		}
-		for j := 0; j < n; j++ {
-			squareMatrix[i][j] -= min
-		}
+	h := &Hungarian{
+		n:      n,
+		matrix: squareMatrix,
+		labelX: make([]float64, n),
+		labelY: make([]float64, n),
+		xy:     make([]int, n),
+		yx:     make([]int, n),
+		S:      make([]bool, n),
+		T:      make([]bool, n),
+		Slack:  make([]float64, n),
+		Slackx: make([]int, n),
+		prev:   make([]int, n),
 	}
 
-	// 列の最小値を引く
-	for j := 0; j < n; j++ {
-		min := squareMatrix[0][j]
-		for i := 1; i < n; i++ {
-			if squareMatrix[i][j] < min {
-				min = squareMatrix[i][j]
-			}
-		}
-		for i := 0; i < n; i++ {
-			squareMatrix[i][j] -= min
-		}
+	// 初期ラベル設定
+	for x := 0; x < n; x++ {
+		h.labelX[x] = h.minInRow(x)
 	}
-
-	// マッチングのための配列
-	mate := make([]int, n)
-	for i := range mate {
-		mate[i] = -1
+	for y := 0; y < n; y++ {
+		h.labelY[y] = h.minInCol(y)
 	}
 
 	// 初期マッチングの作成
-	for i := 0; i < n; i++ {
-		for j := 0; j < n; j++ {
-			if squareMatrix[i][j] == 0 && mate[j] == -1 {
-				mate[j] = i
+	for x := 0; x < n; x++ {
+		for y := 0; y < n; y++ {
+			if h.matrix[x][y] == h.labelX[x]+h.labelY[y] && h.yx[y] == -1 {
+				h.xy[x] = y
+				h.yx[y] = x
 				break
 			}
 		}
 	}
 
-	// カバー行とカバー列のフラグ
-	coveredRows := make([]bool, n)
-	coveredCols := make([]bool, n)
+	// 初期化: -1 は未マッチを示す
+	for i := range h.xy {
+		if h.xy[i] == 0 && !h.isMatched(i) {
+			h.xy[i] = -1
+		}
+	}
 
+	return h
+}
+
+// minInRow は指定された行の最小値を返します。
+func (h *Hungarian) minInRow(x int) float64 {
+	min := InfinityFloat
+	for y := 0; y < h.n; y++ {
+		if h.matrix[x][y] < min {
+			min = h.matrix[x][y]
+		}
+	}
+	return min
+}
+
+// minInCol は指定された列の最小値を返します。
+func (h *Hungarian) minInCol(y int) float64 {
+	min := InfinityFloat
+	for x := 0; x < h.n; x++ {
+		if h.matrix[x][y] < min {
+			min = h.matrix[x][y]
+		}
+	}
+	return min
+}
+
+// isMatched は列yがマッチしているかを返します。
+func (h *Hungarian) isMatched(y int) bool {
+	return h.yx[y] != -1
+}
+
+// Execute はハンガリアン・アルゴリズムを実行します。
+func (h *Hungarian) Execute() {
 	for {
-		// ゼロのカバーを行う
-		coveredRows = make([]bool, n)
-		coveredCols = make([]bool, n)
-
-		// ステップ1: 独立ゼロを選び、カバー
-		zeros := findIndependentZeros(squareMatrix, n)
-		for _, zero := range zeros {
-			coveredRows[zero[0]] = true
-			coveredCols[zero[1]] = true
+		// S, T, Slack, prev を初期化
+		h.S = make([]bool, h.n)
+		h.T = make([]bool, h.n)
+		for j := 0; j < h.n; j++ {
+			h.Slack[j] = InfinityFloat
+		}
+		for i := 0; i < h.n; i++ {
+			h.prev[i] = -1
 		}
 
-		// カバーされた行と列の数をカウント
-		coveredCount := 0
-		for _, c := range coveredCols {
-			if c {
-				coveredCount++
+		// 初期の未マッチの行を探す
+		root := -1
+		for x := 0; x < h.n; x++ {
+			if h.xy[x] == -1 {
+				root = x
+				h.S[x] = true
+				for y := 0; y < h.n; y++ {
+					if h.labelX[x]+h.labelY[y]-h.matrix[x][y] < h.Slack[y] {
+						h.Slack[y] = h.labelX[x] + h.labelY[y] - h.matrix[x][y]
+						h.Slackx[y] = x
+					}
+				}
+				break
 			}
 		}
-		for _, r := range coveredRows {
-			if r {
-				coveredCount++
+
+		if root == -1 {
+			break // 全てマッチしている
+		}
+
+		// BFS用のキュー
+		queue := []int{root}
+		found := false
+		var x, y int
+
+		for len(queue) > 0 && !found {
+			x = queue[0]
+			queue = queue[1:]
+
+			for y = 0; y < h.n; y++ {
+				if h.matrix[x][y] == h.labelX[x]+h.labelY[y] && !h.T[y] {
+					if h.yx[y] == -1 {
+						// 増加パスを見つけた
+						found = true
+						h.prev[x] = y
+						break
+					}
+					h.T[y] = true
+					queue = append(queue, h.yx[y])
+					h.S[h.yx[y]] = true
+					for j := 0; j < h.n; j++ {
+						if h.labelX[h.yx[y]]+h.labelY[j]-h.matrix[h.yx[y]][j] < h.Slack[j] {
+							h.Slack[j] = h.labelX[h.yx[y]] + h.labelY[j] - h.matrix[h.yx[y]][j]
+							h.Slackx[j] = h.yx[y]
+						}
+					}
+				}
 			}
 		}
 
-		// カバーされた数がn未満なら調整
-		if coveredCount < n {
-			// 最小未カバー値を見つける
-			minUncovered := Infinity
-			for i := 0; i < n; i++ {
-				if !coveredRows[i] {
-					for j := 0; j < n; j++ {
-						if !coveredCols[j] && squareMatrix[i][j] < minUncovered {
-							minUncovered = squareMatrix[i][j]
+		if found {
+			// 増加パスをたどってマッチングを更新
+			x, y = h.prev[x], y
+			for {
+				prevY := h.xy[x]
+				h.xy[x] = y
+				h.yx[y] = x
+				if prevY == -1 {
+					break
+				}
+				x = h.prev[h.yx[prevY]]
+				y = prevY
+			}
+		} else {
+			// ラベルを調整
+			delta := InfinityFloat
+			for j := 0; j < h.n; j++ {
+				if !h.T[j] && h.Slack[j] < delta {
+					delta = h.Slack[j]
+				}
+			}
+
+			for i := 0; i < h.n; i++ {
+				if h.S[i] {
+					h.labelX[i] -= delta
+				}
+			}
+			for j := 0; j < h.n; j++ {
+				if h.T[j] {
+					h.labelY[j] += delta
+				} else {
+					h.Slack[j] -= delta
+				}
+			}
+
+			// 再探索
+			for j := 0; j < h.n; j++ {
+				if !h.T[j] && h.Slack[j] == 0 {
+					if h.yx[j] == -1 {
+						// 増加パスを見つけた
+						x = h.Slackx[j]
+						y = j
+						found = true
+						break
+					} else {
+						h.T[j] = true
+						queue = append(queue, h.yx[j])
+						h.S[h.yx[j]] = true
+						for k := 0; k < h.n; k++ {
+							if h.labelX[h.yx[j]]+h.labelY[k]-h.matrix[h.yx[j]][k] < h.Slack[k] {
+								h.Slack[k] = h.labelX[h.yx[j]] + h.labelY[k] - h.matrix[h.yx[j]][k]
+								h.Slackx[k] = h.yx[j]
+							}
 						}
 					}
 				}
 			}
 
-			// 最小値を調整
-			for i := 0; i < n; i++ {
-				for j := 0; j < n; j++ {
-					if coveredRows[i] && coveredCols[j] {
-						squareMatrix[i][j] += minUncovered
-					} else if !coveredRows[i] && !coveredCols[j] {
-						squareMatrix[i][j] -= minUncovered
+			if found {
+				// 増加パスをたどってマッチングを更新
+				x = h.Slackx[y]
+				for {
+					prevY := h.xy[x]
+					h.xy[x] = y
+					h.yx[y] = x
+					if prevY == -1 {
+						break
 					}
+					x = h.Slackx[prevY]
+					y = prevY
 				}
 			}
-
-			// 再度マッチングを試みる
-			for i := 0; i < n; i++ {
-				for j := 0; j < n; j++ {
-					if squareMatrix[i][j] == 0 && mate[j] == -1 {
-						mate[j] = i
-					}
-				}
-			}
-		} else {
-			break
 		}
 	}
+}
 
-	// 結果の割り当てと総コストを計算
+// HungarianAlgorithm はハンガリアン・アルゴリズムを実装します。
+// costMatrix は割り当てコストの行列（非正方行列も可）です。
+// 戻り値は最小コストと割り当て結果のスライスです。
+func HungarianAlgorithm(costMatrix [][]float64) (float64, []int) {
+	matcher := NewHungarian(costMatrix)
+	matcher.Execute()
+
+	rows := len(costMatrix)
+	cols := len(costMatrix[0])
+	n := matcher.n
+
 	totalCost := 0.0
-	assignment := make([]int, rows) // 元の行数に対応
-	for i := range assignment {
+	assignment := make([]int, rows)
+	for i := 0; i < rows; i++ {
 		assignment[i] = -1
 	}
-	for i := 0; i < n; i++ {
-		if mate[i] < rows && i < cols && mate[i] >= 0 {
-			assignment[mate[i]] = i
-			totalCost += costMatrix[mate[i]][i]
+
+	for x := 0; x < n; x++ {
+		y := matcher.xy[x]
+		if x < rows && y < cols {
+			assignment[x] = y
+			totalCost += costMatrix[x][y]
 		}
 	}
 
 	return totalCost, assignment
-}
-
-// findIndependentZeros は独立したゼロの位置を見つけます。
-func findIndependentZeros(matrix [][]float64, n int) [][2]int {
-	mate := make([]int, n)
-	for i := range mate {
-		mate[i] = -1
-	}
-	zeros := [][2]int{}
-	for i := 0; i < n; i++ {
-		for j := 0; j < n; j++ {
-			if matrix[i][j] == 0 && mate[j] == -1 {
-				mate[j] = i
-				zeros = append(zeros, [2]int{i, j})
-				break
-			}
-		}
-	}
-	return zeros
 }
