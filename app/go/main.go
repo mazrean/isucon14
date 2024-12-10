@@ -18,6 +18,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	isutools "github.com/mazrean/isucon-go-tools/v2"
 	isudb "github.com/mazrean/isucon-go-tools/v2/db"
+	isuhttp "github.com/mazrean/isucon-go-tools/v2/http"
 )
 
 var db *sqlx.DB
@@ -76,7 +77,7 @@ func main() {
 		})
 	}
 
-	http.ListenAndServe(":8080", mux)
+	isuhttp.ListenAndServe(":8080", mux)
 }
 
 func setup() http.Handler {
