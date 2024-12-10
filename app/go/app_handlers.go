@@ -353,6 +353,8 @@ func appPostRides(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	now := time.Now()
+
 	user := ctx.Value("user").(*User)
 	rideID := ulid.Make().String()
 
@@ -377,9 +379,9 @@ func appPostRides(w http.ResponseWriter, r *http.Request) {
 
 	if _, err := tx.ExecContext(
 		ctx,
-		`INSERT INTO rides (id, user_id, pickup_latitude, pickup_longitude, destination_latitude, destination_longitude)
-				  VALUES (?, ?, ?, ?, ?, ?)`,
-		rideID, user.ID, req.PickupCoordinate.Latitude, req.PickupCoordinate.Longitude, req.DestinationCoordinate.Latitude, req.DestinationCoordinate.Longitude,
+		`INSERT INTO rides (id, user_id, pickup_latitude, pickup_longitude, destination_latitude, destination_longitude, created_at, updated_at)
+				  VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		rideID, user.ID, req.PickupCoordinate.Latitude, req.PickupCoordinate.Longitude, req.DestinationCoordinate.Latitude, req.DestinationCoordinate.Longitude, now, now,
 	); err != nil {
 		writeError(w, r, http.StatusInternalServerError, err)
 		return
@@ -551,6 +553,8 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	rideID := r.PathValue("ride_id")
 
+	now := time.Now()
+
 	req := &appPostRideEvaluationRequest{}
 	if err := bindJSON(r, req); err != nil {
 		writeError(w, r, http.StatusBadRequest, err)
@@ -590,8 +594,8 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 
 	result, err := tx.ExecContext(
 		ctx,
-		`UPDATE rides SET evaluation = ? WHERE id = ?`,
-		req.Evaluation, rideID)
+		`UPDATE rides SET evaluation = ?, updated_at = ? WHERE id = ?`,
+		req.Evaluation, now, rideID)
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, err)
 		return
