@@ -776,7 +776,7 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 	sb := &strings.Builder{}
 	err = json.NewEncoder(sb).Encode(response)
 	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, fmt.Errorf("failed to encode response1(%+v): %w", response.Chair, err))
+		writeError(w, r, http.StatusInternalServerError, fmt.Errorf("failed to encode response(%+v): %w", response, err))
 		return
 	}
 	fmt.Fprintf(w, "data: %s\n", sb.String())
@@ -823,7 +823,7 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 			sb := &strings.Builder{}
 			err = json.NewEncoder(sb).Encode(response)
 			if err != nil {
-				writeError(w, r, http.StatusInternalServerError, fmt.Errorf("failed to encode response2(%+v): %w", response.Chair, err))
+				writeError(w, r, http.StatusInternalServerError, fmt.Errorf("failed to encode response(%+v): %w", response, err))
 				return
 			}
 			fmt.Fprintf(w, "data: %s\n", sb.String())
