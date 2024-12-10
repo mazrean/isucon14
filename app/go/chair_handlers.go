@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	isuhttp "github.com/mazrean/isucon-go-tools/v2/http"
 	"github.com/oklog/ulid/v2"
 )
 
@@ -381,6 +382,7 @@ type postChairRidesRideIDStatusRequest struct {
 }
 
 func chairPostRideStatus(w http.ResponseWriter, r *http.Request) {
+	isuhttp.SetPath(r, "/api/chair/rides/{ride_id}/status")
 	ctx := r.Context()
 	rideID := r.PathValue("ride_id")
 
