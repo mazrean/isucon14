@@ -360,7 +360,7 @@ func HungarianAlgorithm(costMatrix [][]float64) (float64, []int) {
 		assignment[i] = -1
 	}
 	for i := 0; i < n; i++ {
-		if mate[i] < rows && i < cols {
+		if mate[i] < rows && i < cols && mate[i] >= 0 {
 			assignment[mate[i]] = i
 			totalCost += costMatrix[mate[i]][i]
 		}
