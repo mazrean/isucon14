@@ -242,10 +242,15 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 
 	for _, ch := range chairs {
 		if _, ok := matchedChairIDMap[ch.ID]; !ok {
-			emptyChairs = append(emptyChairs, ch)
-			slog.Info("chair is added to empty chairs in matching",
-				slog.String("chair_id", ch.ID),
-			)
+			func() {
+				emptyChairsLocker.Lock()
+				defer emptyChairsLocker.Unlock()
+
+				emptyChairs = append(emptyChairs, ch)
+				slog.Info("chair is added to empty chairs in matching",
+					slog.String("chair_id", ch.ID),
+				)
+			}()
 		}
 	}
 
