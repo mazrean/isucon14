@@ -908,6 +908,10 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 				writeError(w, r, http.StatusInternalServerError, err)
 				return
 			}
+
+			if response.Status == "COMPLETED" {
+				return
+			}
 		}
 	}
 }
