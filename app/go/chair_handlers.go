@@ -12,7 +12,6 @@ import (
 	"time"
 
 	isuhttp "github.com/mazrean/isucon-go-tools/v2/http"
-	isuqueue "github.com/mazrean/isucon-go-tools/v2/queue"
 	"github.com/oklog/ulid/v2"
 )
 
@@ -137,13 +136,13 @@ type CoordinateReq struct {
 	coord *Coordinate
 }
 
-var queue = isuqueue.NewChannel[*CoordinateReq]("chairLocationQueue", 10000)
+var queue = make(chan *CoordinateReq, 10000)
 
 func init() {
 	go func() {
 		for {
 			func() {
-				coord := <-queue.Pop()
+				coord := <-queue
 				chair := coord.chair
 				req := coord.coord
 				ctx := context.Background()
@@ -247,7 +246,7 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now()
 
-	queue.Push() <- &CoordinateReq{
+	queue <- &CoordinateReq{
 		chair: chair,
 		coord: req,
 	}
