@@ -357,7 +357,7 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 					Status: status.Status,
 				}
 			} else {
-				status, err := getLatestRideStatusWithID(ctx, db, ride.ID)
+				status, err = getLatestRideStatusWithID(ctx, db, ride.ID)
 				if err != nil {
 					writeError(w, r, http.StatusInternalServerError, err)
 					return
@@ -378,6 +378,7 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 				slog.String("ride_id", response.RideID),
 				slog.String("chair_id", chair.ID),
 				slog.String("user_id", response.User.ID),
+				slog.String("status", status.ID),
 				slog.String("status", response.Status),
 				slog.String("response", sb.String()),
 			)
