@@ -185,13 +185,6 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for {
-		_, ok := <-queue
-		if !ok {
-			break
-		}
-	}
-
 	writeJSON(w, http.StatusOK, postInitializeResponse{Language: "go"})
 }
 
