@@ -306,7 +306,7 @@ func init() {
 			return "", err
 		}
 		return status, nil
-	}, 2*time.Second, 2*time.Second, sc.WithMapBackend(1000))
+	}, 2*time.Second, 2*time.Second, sc.WithMapBackend(1000), sc.EnableStrictCoalescing())
 	if err != nil {
 		panic(fmt.Sprintf("failed to create rideStatusesCache: %v", err))
 	}
@@ -1057,9 +1057,9 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	compoletedChairs := []*Chair{}
-NEAR_BY_LOOP:
 	for _, chair := range chairs {
 		// Check rides for this chair
+		skip := false
 		if chairRides, exists := rideMap[chair.ID]; exists {
 			for _, ride := range chairRides {
 				// 過去にライドが存在し、かつ、それが完了していない場合はスキップ
@@ -1069,10 +1069,13 @@ NEAR_BY_LOOP:
 					return
 				}
 				if status != "COMPLETED" {
-					slog.Info("skip chair", slog.String("chair_id", chair.ID), slog.String("ride_id", ride.ID), slog.String("status", status))
-					continue NEAR_BY_LOOP
+					skip = true
+					break
 				}
 			}
+		}
+		if skip {
+			continue
 		}
 
 		compoletedChairs = append(compoletedChairs, &chair)
