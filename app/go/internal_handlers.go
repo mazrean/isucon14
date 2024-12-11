@@ -217,7 +217,11 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 			pd := float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, location.LastLatitude, location.LastLongitude)) / float64(chairModelSpeedCache[ch.Model])
 			dd := float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude))
 			age := int(time.Since(ride.CreatedAt).Milliseconds())
-			loss := math.Pow(float64(age)/10000, 2)
+			loss := math.Pow(float64(age)/10000, 3)
+			// 25s以上経過しているrideは優先度を大きく上げる
+			if age > 25000 {
+				loss += 1000000
+			}
 
 			// ベンチマーカーハック: ベンチマーク中にマッチングの期限を迎えないrideは割り当て優先度を下げ、終了後にマッチングさせる
 			isNoAgeLimit := isInBenchmark && ride.CreatedAt.After(benchStartedAt.Add(35*time.Second))
