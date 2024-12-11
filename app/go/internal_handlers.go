@@ -234,7 +234,7 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 				loss = 8 - math.Pow(float64(age+1)/1000, 3)
 			}
 
-			score := dd - 100*pd + 100000*loss
+			score := 50*dd - 100*pd + 100000*loss
 
 			matches = append(matches, match{
 				ride:  &ride,
