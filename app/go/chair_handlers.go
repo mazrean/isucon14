@@ -147,7 +147,7 @@ type chairPostCoordinateRequest struct {
 var chairPostCoordinateCh = make(chan *chairPostCoordinateRequest, 10000000)
 
 func init() {
-	const limit = 1000
+	const limit = 100
 	go func() {
 		for {
 			chairIDCoodinateMap := make(map[string]*Coordinate, limit)
@@ -164,7 +164,7 @@ func init() {
 				chairIDCoodinateMap[req.chairID] = req.coordinate
 			}
 
-			updateChairLocationsToBadger(chairIDCoodinateMap)
+			go updateChairLocationsToBadger(chairIDCoodinateMap)
 		}
 	}()
 }
