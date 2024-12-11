@@ -153,7 +153,6 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 		chairs = emptyChairs
 		emptyChairs = []*Chair{}
 	}()
-	weight := 1
 
 	chairMap := map[string]*Chair{}
 	for _, ch := range chairs {
@@ -222,7 +221,7 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			dist := float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, location.LastLatitude, location.LastLongitude)*weight+manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude)) / float64(chairModelSpeedCache[ch.Model])
+			dist := float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, location.LastLatitude, location.LastLongitude)*10+manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude)) / float64(chairModelSpeedCache[ch.Model])
 			if dist < bestDist {
 				bestDist = dist
 			}
