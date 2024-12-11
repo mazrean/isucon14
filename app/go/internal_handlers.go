@@ -248,7 +248,7 @@ RIDE_LOOP:
 			dist := (float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, location.LastLatitude, location.LastLongitude)) + float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude))*0.3) / float64(chairModelSpeedCache[ch.Model])
 
 			age := int(time.Since(ride.CreatedAt).Milliseconds())
-			score := (1000 / (dist*10 + 1)) + float64(age/100)
+			score := (5000 / (dist*10 + 1)) + float64(age/100)
 			if age > 20000 {
 				score -= 10000
 			}
