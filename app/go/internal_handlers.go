@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"database/sql"
 	"errors"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -228,12 +229,10 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 	type match struct {
 		ride  *Ride
 		ch    *Chair
-		dist  float64
 		age   int
 		score float64
 	}
 	matches := []match{}
-RIDE_LOOP:
 	for _, ride := range rides {
 		for _, ch := range availableChairs {
 			location, ok, err := getChairLocationFromBadger(ch.ID)
@@ -245,27 +244,27 @@ RIDE_LOOP:
 				continue
 			}
 
-			dist := (float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, location.LastLatitude, location.LastLongitude)) + float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude))*0.3) / float64(chairModelSpeedCache[ch.Model])
-
+			pd := float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, location.LastLatitude, location.LastLongitude)) / float64(chairModelSpeedCache[ch.Model])
+			dd := float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude))
 			age := int(time.Since(ride.CreatedAt).Milliseconds())
-			score := (10000 / (dist*10 + 1)) + float64(age/100)
-			if age > 20000 {
-				score += 10000
-			}
+			loss := math.Pow(float64(age)/25000, 3)
+
+			score := dd - 100*pd + 10000*loss
 
 			scoreHistgram.WithLabelValues(ch.ID, ride.ID).Observe(score)
 			ageHistgram.WithLabelValues(ch.ID, ride.ID).Observe(float64(age))
-			distHistgram.WithLabelValues(ch.ID, ride.ID).Observe(float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, location.LastLatitude, location.LastLongitude)*10 + manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude)))
-			pickupDistHistgram.WithLabelValues(ch.ID, ride.ID).Observe(float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, location.LastLatitude, location.LastLongitude)))
-			destDistHistgram.WithLabelValues(ch.ID, ride.ID).Observe(float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude)))
+			distHistgram.WithLabelValues(ch.ID, ride.ID).Observe(pd + dd)
+			pickupDistHistgram.WithLabelValues(ch.ID, ride.ID).Observe(pd)
+			destDistHistgram.WithLabelValues(ch.ID, ride.ID).Observe(dd)
 
-			matches = append(matches, match{
-				ride:  &ride,
-				ch:    ch,
-				dist:  dist,
-				age:   age,
-				score: score,
-			})
+			if pd <= 1000 {
+				matches = append(matches, match{
+					ride:  &ride,
+					ch:    ch,
+					age:   age,
+					score: score,
+				})
+			}
 		}
 	}
 	slices.SortFunc(matches, func(a, b match) int {
