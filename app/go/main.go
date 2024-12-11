@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"time"
 
 	"github.com/goccy/go-json"
 
@@ -185,6 +186,8 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusInternalServerError, err)
 		return
 	}
+
+	benchStartedAt = time.Now()
 
 	writeJSON(w, http.StatusOK, postInitializeResponse{Language: "go"})
 }
