@@ -211,14 +211,8 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 	}
 	matches := make([]match, 0, len(rides)*len(chairs))
 	for _, ride := range rides {
-		if len(availableChairs) == 0 {
-			break // 椅子がもう無い
-		}
-
-		// rideに対して最も近いchairを探す
-		bestIdx := -1
 		bestDist := math.MaxFloat64
-		for i, ch := range availableChairs {
+		for _, ch := range availableChairs {
 			location, ok, err := getChairLocationFromBadger(ch.ID)
 			if err != nil {
 				writeError(w, r, http.StatusInternalServerError, err)
@@ -231,7 +225,6 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 			dist := float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, location.LastLatitude, location.LastLongitude)*weight+manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude)) / float64(chairModelSpeedCache[ch.Model])
 			if dist < bestDist {
 				bestDist = dist
-				bestIdx = i
 			}
 
 			age := int(time.Since(ride.CreatedAt).Milliseconds())
