@@ -216,7 +216,7 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 			age := int(time.Since(ride.CreatedAt).Milliseconds())
 			loss := math.Pow(float64(age)/10000, 3)
 
-			score := 3*dd - 100*pd + 1000*loss
+			score := 3*dd - 100*pd + 10000*loss
 
 			matches = append(matches, match{
 				ride:  &ride,
