@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"database/sql"
 	"errors"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -249,7 +248,7 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 
 			age := int(time.Since(ride.CreatedAt).Milliseconds())
 			score := dist - float64(age/100)
-			if age > 2000 {
+			if age > 20000 {
 				score -= 100000
 			}
 
@@ -271,7 +270,6 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 	slices.SortFunc(matches, func(a, b match) int {
 		return cmp.Compare(a.score, b.score)
 	})
-	log.Println(matches)
 
 	matchedChairIDMap := map[string]struct{}{}
 	matchedRideIDMap := map[string]struct{}{}
