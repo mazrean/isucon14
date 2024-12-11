@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"database/sql"
 	"errors"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -258,20 +259,19 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 			pickupDistHistgram.WithLabelValues(ch.ID, ride.ID).Observe(float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, location.LastLatitude, location.LastLongitude)))
 			destDistHistgram.WithLabelValues(ch.ID, ride.ID).Observe(float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude)))
 
-			if score < 10000 {
-				matches = append(matches, match{
-					ride:  &ride,
-					ch:    ch,
-					dist:  dist,
-					age:   age,
-					score: score,
-				})
-			}
+			matches = append(matches, match{
+				ride:  &ride,
+				ch:    ch,
+				dist:  dist,
+				age:   age,
+				score: score,
+			})
 		}
 	}
 	slices.SortFunc(matches, func(a, b match) int {
 		return cmp.Compare(a.score, b.score)
 	})
+	log.Println(matches)
 
 	matchedChairIDMap := map[string]struct{}{}
 	matchedRideIDMap := map[string]struct{}{}
