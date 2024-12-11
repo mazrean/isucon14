@@ -139,6 +139,36 @@ func chairPostActivity(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+type chairPostCoordinateRequest struct {
+	chairID    string
+	coordinate *Coordinate
+}
+
+var chairPostCoordinateCh = make(chan *chairPostCoordinateRequest, 10000000)
+
+func init() {
+	const limit = 1000
+	go func() {
+		for {
+			chairIDCoodinateMap := make(map[string]*Coordinate, limit)
+			req := <-chairPostCoordinateCh
+
+			chairIDCoodinateMap[req.chairID] = req.coordinate
+
+			for len(chairIDCoodinateMap) < limit {
+				req, ok := <-chairPostCoordinateCh
+				if !ok {
+					break
+				}
+
+				chairIDCoodinateMap[req.chairID] = req.coordinate
+			}
+
+			updateChairLocationsToBadger(chairIDCoodinateMap)
+		}
+	}()
+}
+
 var latestRideCache = isucache.NewAtomicMap[string, *Ride]("latestRideCache")
 
 type chairPostCoordinateResponse struct {
@@ -156,6 +186,11 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 	chair := ctx.Value("chair").(*Chair)
 
 	now := time.Now()
+
+	chairPostCoordinateCh <- &chairPostCoordinateRequest{
+		chairID:    chair.ID,
+		coordinate: req,
+	}
 
 	var newStatus *RideStatus
 	var (
@@ -196,11 +231,6 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-
-	updateChairLocationToBadger(chair.ID, &Coordinate{
-		Latitude:  req.Latitude,
-		Longitude: req.Longitude,
-	})
 
 	if newStatus != nil {
 		rideStatusesCache.Store(ride.ID, newStatus)
