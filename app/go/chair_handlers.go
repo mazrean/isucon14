@@ -148,12 +148,12 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 
 	chair := ctx.Value("chair").(*Chair)
 
-	tx, err := db.Beginx()
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
-		return
-	}
-	defer tx.Rollback()
+	go func() {
+		updateChairLocationToBadger(chair.ID, &Coordinate{
+			Latitude:  req.Latitude,
+			Longitude: req.Longitude,
+		})
+	}()
 
 	now := time.Now()
 
@@ -163,7 +163,7 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 		ok   bool
 	)
 	if ride, ok = latestRideCache.Load(chair.ID); ok {
-		status, err := getLatestRideStatus(ctx, tx, ride.ID)
+		status, err := getLatestRideStatus(ctx, db, ride.ID)
 		if err != nil {
 			writeError(w, r, http.StatusInternalServerError, err)
 			return
@@ -171,7 +171,7 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 		if status != "COMPLETED" && status != "CANCELED" {
 			if req.Latitude == ride.PickupLatitude && req.Longitude == ride.PickupLongitude && status == "ENROUTE" {
 				statusID := ulid.Make().String()
-				if _, err := tx.ExecContext(ctx, "INSERT INTO ride_statuses (id, ride_id, status) VALUES (?, ?, ?)", statusID, ride.ID, "PICKUP"); err != nil {
+				if _, err := db.ExecContext(ctx, "INSERT INTO ride_statuses (id, ride_id, status) VALUES (?, ?, ?)", statusID, ride.ID, "PICKUP"); err != nil {
 					writeError(w, r, http.StatusInternalServerError, err)
 					return
 				}
@@ -184,7 +184,7 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 
 			if req.Latitude == ride.DestinationLatitude && req.Longitude == ride.DestinationLongitude && status == "CARRYING" {
 				statusID := ulid.Make().String()
-				if _, err := tx.ExecContext(ctx, "INSERT INTO ride_statuses (id, ride_id, status) VALUES (?, ?, ?)", statusID, ride.ID, "ARRIVED"); err != nil {
+				if _, err := db.ExecContext(ctx, "INSERT INTO ride_statuses (id, ride_id, status) VALUES (?, ?, ?)", statusID, ride.ID, "ARRIVED"); err != nil {
 					writeError(w, r, http.StatusInternalServerError, err)
 					return
 				}
@@ -195,16 +195,6 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-	}
-
-	updateChairLocationToBadger(chair.ID, &Coordinate{
-		Latitude:  req.Latitude,
-		Longitude: req.Longitude,
-	})
-
-	if err := tx.Commit(); err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
-		return
 	}
 
 	if newStatus != nil {
@@ -225,7 +215,7 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 	sb.WriteString(`{"recorded_at":`)
 	sb.WriteString(fmt.Sprint(now.UnixMilli()))
 	sb.WriteString("}")
-	_, err = io.Copy(w, strings.NewReader(sb.String()))
+	_, err := io.Copy(w, strings.NewReader(sb.String()))
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
