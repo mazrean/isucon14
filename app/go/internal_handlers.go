@@ -248,9 +248,9 @@ RIDE_LOOP:
 			dist := (float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, location.LastLatitude, location.LastLongitude)) + float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude))*0.3) / float64(chairModelSpeedCache[ch.Model])
 
 			age := int(time.Since(ride.CreatedAt).Milliseconds())
-			score := (5000 / (dist*10 + 1)) + float64(age/100)
+			score := (10000 / (dist*10 + 1)) + float64(age/100)
 			if age > 20000 {
-				score -= 10000
+				score += 10000
 			}
 
 			scoreHistgram.WithLabelValues(ch.ID, ride.ID).Observe(score)
@@ -259,23 +259,13 @@ RIDE_LOOP:
 			pickupDistHistgram.WithLabelValues(ch.ID, ride.ID).Observe(float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, location.LastLatitude, location.LastLongitude)))
 			destDistHistgram.WithLabelValues(ch.ID, ride.ID).Observe(float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude)))
 
-			if dist <= 1000 {
-				matches = append(matches, match{
-					ride:  &ride,
-					ch:    ch,
-					dist:  dist,
-					age:   age,
-					score: score,
-				})
-			}
-			if len(matches) >= 1000 {
-				slog.Info("matching break",
-					"rides", len(rides),
-					"chairs", len(chairs),
-					"matches", len(matches),
-				)
-				break RIDE_LOOP
-			}
+			matches = append(matches, match{
+				ride:  &ride,
+				ch:    ch,
+				dist:  dist,
+				age:   age,
+				score: score,
+			})
 		}
 	}
 	slices.SortFunc(matches, func(a, b match) int {
