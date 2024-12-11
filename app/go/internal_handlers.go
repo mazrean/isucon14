@@ -104,7 +104,7 @@ HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0
 }
 
 func init() {
-	ticker := time.NewTicker(200 * time.Millisecond)
+	ticker := time.NewTicker(100 * time.Millisecond)
 	go func() {
 		for range ticker.C {
 			isChairExist := func() bool {
@@ -153,14 +153,7 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 		chairs = emptyChairs
 		emptyChairs = []*Chair{}
 	}()
-	weight := len(chairs)
-	if weight == 0 {
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-	if weight > 5 {
-		weight = 5
-	}
+	weight := 1
 
 	chairMap := map[string]*Chair{}
 	for _, ch := range chairs {
@@ -198,16 +191,25 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 
 	// 3. メモリ上でマンハッタン距離が最短になる椅子を割り当てる
 	// 注意: rides数とchairs数が大きい場合、ここはO(N*M)になる
-	var assignments []struct {
+	type assignment struct {
 		chairID string
 		rideID  string
 		userID  string
 		ride    *Ride
 	}
+	var assignments []assignment
 
 	// chairsを可変なsliceとして扱えるようにする
 	availableChairs := chairs
 
+	type match struct {
+		ride  *Ride
+		ch    *Chair
+		dist  float64
+		age   int
+		score float64
+	}
+	matches := make([]match, 0, len(rides)*len(chairs))
 	for _, ride := range rides {
 		if len(availableChairs) == 0 {
 			break // 椅子がもう無い
@@ -231,26 +233,43 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 				bestDist = dist
 				bestIdx = i
 			}
+
+			age := int(time.Since(ride.CreatedAt).Milliseconds())
+			score := dist - float64(age/10)
+			if age > 2000 {
+				score -= 100000
+			}
+
+			if score < 150 {
+				matches = append(matches, match{
+					ride:  &ride,
+					ch:    ch,
+					dist:  dist,
+					age:   int(time.Since(ride.CreatedAt).Milliseconds()),
+					score: dist + float64(int(time.Since(ride.CreatedAt).Milliseconds())/1000),
+				})
+			}
+		}
+	}
+
+	matchedChairIDMap := map[string]struct{}{}
+	matchedRideIDMap := map[string]struct{}{}
+	for _, m := range matches {
+		if _, ok := matchedChairIDMap[m.ch.ID]; ok {
+			continue
+		}
+		if _, ok := matchedRideIDMap[m.ride.ID]; ok {
+			continue
 		}
 
-		// 最適な椅子が見つかったら割り当て
-		if bestIdx >= 0 {
-			assignments = append(assignments, struct {
-				chairID string
-				rideID  string
-				userID  string
-				ride    *Ride
-			}{
-				chairID: availableChairs[bestIdx].ID,
-				rideID:  ride.ID,
-				userID:  ride.UserID,
-				ride:    &ride,
-			})
-
-			// 使用済みの椅子をリストから除去(末尾とスワップして削除する)
-			availableChairs[bestIdx] = availableChairs[len(availableChairs)-1]
-			availableChairs = availableChairs[:len(availableChairs)-1]
-		}
+		assignments = append(assignments, assignment{
+			chairID: m.ch.ID,
+			rideID:  m.ride.ID,
+			userID:  m.ride.UserID,
+			ride:    m.ride,
+		})
+		matchedChairIDMap[m.ch.ID] = struct{}{}
+		matchedRideIDMap[m.ride.ID] = struct{}{}
 	}
 
 	// 割当がなかった場合
@@ -259,7 +278,6 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	matchedChairIDMap := map[string]struct{}{}
 	for _, a := range assignments {
 		if _, err := db.ExecContext(ctx, "UPDATE rides SET chair_id = ?, updated_at = ? WHERE id = ?", a.chairID, time.Now(), a.rideID); err != nil {
 			writeError(w, r, http.StatusInternalServerError, err)
@@ -277,7 +295,6 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 			rideID:  a.rideID,
 		})
 		latestRideCache.Store(a.chairID, a.ride)
-		matchedChairIDMap[a.chairID] = struct{}{}
 	}
 
 	for _, ch := range chairs {
