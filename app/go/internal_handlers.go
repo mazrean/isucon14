@@ -213,16 +213,6 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 		"chairs", len(chairs),
 	)
 
-	// 3. メモリ上でマンハッタン距離が最短になる椅子を割り当てる
-	// 注意: rides数とchairs数が大きい場合、ここはO(N*M)になる
-	type assignment struct {
-		chairID string
-		rideID  string
-		userID  string
-		ride    *Ride
-	}
-	var assignments []assignment
-
 	// chairsを可変なsliceとして扱えるようにする
 	availableChairs := chairs
 
@@ -281,39 +271,24 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		assignments = append(assignments, assignment{
-			chairID: m.ch.ID,
-			rideID:  m.ride.ID,
-			userID:  m.ride.UserID,
-			ride:    m.ride,
-		})
-		matchedChairIDMap[m.ch.ID] = struct{}{}
-		matchedRideIDMap[m.ride.ID] = struct{}{}
-	}
-
-	// 割当がなかった場合
-	if len(assignments) == 0 {
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-
-	for _, a := range assignments {
-		if _, err := db.ExecContext(ctx, "UPDATE rides SET chair_id = ?, updated_at = ? WHERE id = ?", a.chairID, time.Now(), a.rideID); err != nil {
+		if _, err := db.ExecContext(ctx, "UPDATE rides SET chair_id = ?, updated_at = ? WHERE id = ?", m.ch.ID, time.Now(), m.ride.ID); err != nil {
 			writeError(w, r, http.StatusInternalServerError, err)
 			return
 		}
 
-		ChairPublish(a.chairID, &RideEvent{
+		ChairPublish(m.ch.ID, &RideEvent{
 			status:  "MATCHED",
-			chairID: a.chairID,
-			rideID:  a.rideID,
+			chairID: m.ch.ID,
+			rideID:  m.ride.ID,
 		})
-		UserPublish(a.userID, &RideEvent{
+		UserPublish(m.ride.UserID, &RideEvent{
 			status:  "MATCHED",
-			chairID: a.chairID,
-			rideID:  a.rideID,
+			chairID: m.ch.ID,
+			rideID:  m.ride.ID,
 		})
-		latestRideCache.Store(a.chairID, a.ride)
+		latestRideCache.Store(m.ch.ID, m.ride)
+		matchedChairIDMap[m.ch.ID] = struct{}{}
+		matchedRideIDMap[m.ride.ID] = struct{}{}
 	}
 
 	for _, ch := range chairs {
