@@ -278,16 +278,23 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 		matchedRideIDMap[m.ride.ID] = struct{}{}
 	}
 
-	for _, ch := range chairs {
-		if _, ok := matchedChairIDMap[ch.ID]; !ok {
-			func() {
-				emptyChairsLocker.Lock()
-				defer emptyChairsLocker.Unlock()
+	slog.Info("matching end",
+		"matches", len(matches),
+		"matched_chairs", len(matchedChairIDMap),
+		"matched_rides", len(matchedRideIDMap),
+		"empty_chairs", len(emptyChairs),
+		"remaining_rides", len(rides)-len(matchedRideIDMap),
+	)
 
+	func() {
+		emptyChairsLocker.Lock()
+		defer emptyChairsLocker.Unlock()
+		for _, ch := range chairs {
+			if _, ok := matchedChairIDMap[ch.ID]; !ok {
 				emptyChairs = append(emptyChairs, ch)
-			}()
+			}
 		}
-	}
+	}()
 
 	w.WriteHeader(http.StatusNoContent)
 }
