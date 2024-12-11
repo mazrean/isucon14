@@ -232,7 +232,7 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 				score -= 100000
 			}
 
-			if score < 150 {
+			if score < 300 {
 				matches = append(matches, match{
 					ride:  &ride,
 					ch:    ch,
