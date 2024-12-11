@@ -148,13 +148,6 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 
 	chair := ctx.Value("chair").(*Chair)
 
-	go func() {
-		updateChairLocationToBadger(chair.ID, &Coordinate{
-			Latitude:  req.Latitude,
-			Longitude: req.Longitude,
-		})
-	}()
-
 	now := time.Now()
 
 	var newStatus *RideStatus
@@ -196,6 +189,11 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+
+	updateChairLocationToBadger(chair.ID, &Coordinate{
+		Latitude:  req.Latitude,
+		Longitude: req.Longitude,
+	})
 
 	if newStatus != nil {
 		rideStatusesCache.Store(ride.ID, newStatus)
