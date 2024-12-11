@@ -50,7 +50,7 @@ func main() {
 		panic(err)
 	}
 
-	isuhttp.ListenAndServe("0.0.0.0:8080", mux)
+	isuhttp.ListenAndServe(":8080", mux)
 }
 
 func setup() http.Handler {
