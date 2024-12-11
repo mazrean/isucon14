@@ -1,11 +1,12 @@
 package main
 
 import (
+	"cmp"
 	"database/sql"
 	"errors"
-	"math"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"sync"
 	"time"
 
@@ -233,7 +234,6 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 	}
 	matches := make([]match, 0, len(rides)*len(chairs))
 	for _, ride := range rides {
-		bestDist := math.MaxFloat64
 		for _, ch := range availableChairs {
 			location, ok, err := getChairLocationFromBadger(ch.ID)
 			if err != nil {
@@ -244,10 +244,7 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			dist := (float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, location.LastLatitude, location.LastLongitude)) + float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude))*0.1) / float64(chairModelSpeedCache[ch.Model])
-			if dist < bestDist {
-				bestDist = dist
-			}
+			dist := (float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, location.LastLatitude, location.LastLongitude)) + float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude))) / float64(chairModelSpeedCache[ch.Model])
 
 			age := int(time.Since(ride.CreatedAt).Milliseconds())
 			score := dist - float64(age/10)
@@ -272,6 +269,9 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	slices.SortFunc(matches, func(a, b match) int {
+		return cmp.Compare(a.score, b.score)
+	})
 
 	matchedChairIDMap := map[string]struct{}{}
 	matchedRideIDMap := map[string]struct{}{}
