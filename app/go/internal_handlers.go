@@ -247,7 +247,7 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 			dist := (float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, location.LastLatitude, location.LastLongitude)) + float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude))*0.3) / float64(chairModelSpeedCache[ch.Model])
 
 			age := int(time.Since(ride.CreatedAt).Milliseconds())
-			score := (500 / (dist + 1)) - float64(age/100)
+			score := (500 / (dist + 1)) + float64(age/100)
 			if age > 20000 {
 				score -= 10000
 			}
@@ -268,7 +268,7 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	slices.SortFunc(matches, func(a, b match) int {
-		return cmp.Compare(a.score, b.score)
+		return cmp.Compare(b.score, a.score)
 	})
 
 	matchedChairIDMap := map[string]struct{}{}
