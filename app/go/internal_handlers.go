@@ -244,7 +244,7 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			dist := (float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, location.LastLatitude, location.LastLongitude)) + float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude))*0.1) / float64(chairModelSpeedCache[ch.Model])
+			dist := (float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, location.LastLatitude, location.LastLongitude)) + float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude))*0.3) / float64(chairModelSpeedCache[ch.Model])
 
 			age := int(time.Since(ride.CreatedAt).Milliseconds())
 			score := dist - float64(age/100)
@@ -258,7 +258,7 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 			pickupDistHistgram.WithLabelValues(ch.ID, ride.ID).Observe(float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, location.LastLatitude, location.LastLongitude)))
 			destDistHistgram.WithLabelValues(ch.ID, ride.ID).Observe(float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude)))
 
-			if score < 1000 {
+			if score < 10000 {
 				matches = append(matches, match{
 					ride:  &ride,
 					ch:    ch,
