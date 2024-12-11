@@ -147,26 +147,29 @@ type chairPostCoordinateRequest struct {
 var chairPostCoordinateCh = make(chan *chairPostCoordinateRequest, 10000000)
 
 func init() {
+	const worker = 100
 	const limit = 100
-	go func() {
-		for {
-			chairIDCoodinateMap := make(map[string]*Coordinate, limit)
-			req := <-chairPostCoordinateCh
-
-			chairIDCoodinateMap[req.chairID] = req.coordinate
-
-			for len(chairIDCoodinateMap) < limit {
-				req, ok := <-chairPostCoordinateCh
-				if !ok {
-					break
-				}
+	for range worker {
+		go func() {
+			for {
+				chairIDCoodinateMap := make(map[string]*Coordinate, limit)
+				req := <-chairPostCoordinateCh
 
 				chairIDCoodinateMap[req.chairID] = req.coordinate
-			}
 
-			go updateChairLocationsToBadger(chairIDCoodinateMap)
-		}
-	}()
+				for len(chairIDCoodinateMap) < limit {
+					req, ok := <-chairPostCoordinateCh
+					if !ok {
+						break
+					}
+
+					chairIDCoodinateMap[req.chairID] = req.coordinate
+				}
+
+				updateChairLocationsToBadger(chairIDCoodinateMap)
+			}
+		}()
+	}
 }
 
 var latestRideCache = isucache.NewAtomicMap[string, *Ride]("latestRideCache")
