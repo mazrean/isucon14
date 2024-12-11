@@ -11,8 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"golang.org/x/exp/slog"
 )
 
@@ -124,27 +122,6 @@ func init() {
 	}()
 }
 
-var scoreHistgram = promauto.NewHistogramVec(prometheus.HistogramOpts{
-	Name: "matching_score",
-	Help: "Matching score",
-}, []string{"chair_id", "ride_id"})
-var ageHistgram = promauto.NewHistogramVec(prometheus.HistogramOpts{
-	Name: "matching_age",
-	Help: "Matching age",
-}, []string{"chair_id", "ride_id"})
-var distHistgram = promauto.NewHistogramVec(prometheus.HistogramOpts{
-	Name: "matching_dist",
-	Help: "Matching dist",
-}, []string{"chair_id", "ride_id"})
-var pickupDistHistgram = promauto.NewHistogramVec(prometheus.HistogramOpts{
-	Name: "matching_pickup_dist",
-	Help: "Matching pickup dist",
-}, []string{"chair_id", "ride_id"})
-var destDistHistgram = promauto.NewHistogramVec(prometheus.HistogramOpts{
-	Name: "matching_dest_dist",
-	Help: "Matching dest dist",
-}, []string{"chair_id", "ride_id"})
-
 // このAPIをインスタンス内から一定間隔で叩かせることで、椅子とライドをマッチングさせる
 func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -241,20 +218,12 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 
 			score := dd - 100*pd + 10000*loss
 
-			scoreHistgram.WithLabelValues(ch.ID, ride.ID).Observe(score)
-			ageHistgram.WithLabelValues(ch.ID, ride.ID).Observe(float64(age))
-			distHistgram.WithLabelValues(ch.ID, ride.ID).Observe(pd + dd)
-			pickupDistHistgram.WithLabelValues(ch.ID, ride.ID).Observe(pd)
-			destDistHistgram.WithLabelValues(ch.ID, ride.ID).Observe(dd)
-
-			if pd <= 1000 {
-				matches = append(matches, match{
-					ride:  &ride,
-					ch:    ch,
-					age:   age,
-					score: score,
-				})
-			}
+			matches = append(matches, match{
+				ride:  &ride,
+				ch:    ch,
+				age:   age,
+				score: score,
+			})
 		}
 	}
 	slices.SortFunc(matches, func(a, b match) int {
