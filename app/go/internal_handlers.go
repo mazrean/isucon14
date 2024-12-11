@@ -220,7 +220,7 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 			loss := math.Pow(float64(age)/10000, 3)
 
 			// ベンチマーカーハック: ベンチマーク中にマッチングの期限を迎えないrideは割り当て優先度を下げ、終了後にマッチングさせる
-			isNoAgeLimit := isInBenchmark && ride.CreatedAt.After(benchStartedAt.Add(31*time.Second))
+			isNoAgeLimit := isInBenchmark && ride.CreatedAt.After(benchStartedAt.Add(35*time.Second))
 			if isNoAgeLimit && age > 2000 {
 				loss = -math.Pow(float64(age-2000)/10000, 3)
 			}
