@@ -68,6 +68,8 @@ func chairPostChairs(w http.ResponseWriter, r *http.Request) {
 		Value: accessToken,
 	})
 
+	chairStatusGauge.WithLabelValues("COMPLETED").Inc()
+
 	writeJSON(w, http.StatusCreated, &chairPostChairsResponse{
 		ID:      chairID,
 		OwnerID: owner.ID,

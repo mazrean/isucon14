@@ -126,6 +126,8 @@ func appPostUsers(w http.ResponseWriter, r *http.Request) {
 		Value: accessToken,
 	})
 
+	userStatusGauge.WithLabelValues("COMPLETED").Inc()
+
 	writeJSON(w, http.StatusCreated, &appPostUsersResponse{
 		ID:             userID,
 		InvitationCode: invitationCode,
