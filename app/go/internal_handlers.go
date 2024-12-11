@@ -159,6 +159,11 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 		emptyChairs = []*Chair{}
 	}()
 
+	slog.Info("matching start",
+		slog.Int("rides", len(rides)),
+		slog.Int("chairs", len(chairs)),
+	)
+
 	chairMap := map[string]*Chair{}
 	for _, ch := range chairs {
 		chairMap[ch.ID] = ch
