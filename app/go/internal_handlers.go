@@ -232,7 +232,7 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 		age   int
 		score float64
 	}
-	matches := make([]match, 0, len(rides)*len(chairs))
+	matches := []match{}
 	for _, ride := range rides {
 		for _, ch := range availableChairs {
 			location, ok, err := getChairLocationFromBadger(ch.ID)
@@ -247,9 +247,9 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 			dist := (float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, location.LastLatitude, location.LastLongitude)) + float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude))*0.3) / float64(chairModelSpeedCache[ch.Model])
 
 			age := int(time.Since(ride.CreatedAt).Milliseconds())
-			score := dist - float64(age/1000)
+			score := (500 / (dist + 1)) - float64(age/100)
 			if age > 20000 {
-				score -= 100000
+				score -= 10000
 			}
 
 			scoreHistgram.WithLabelValues(ch.ID, ride.ID).Observe(score)
