@@ -222,7 +222,7 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 			// ベンチマーカーハック: ベンチマーク中にマッチングの期限を迎えないrideは割り当て優先度を下げ、終了後にマッチングさせる
 			isNoAgeLimit := isInBenchmark && ride.CreatedAt.After(benchStartedAt.Add(35*time.Second))
 			if isNoAgeLimit {
-				loss = -math.Pow(float64(age+1)/10000, 2)
+				loss = -math.Pow(float64(age+1)/10000, 2.5)
 			}
 
 			score := dd - 100*pd + 100000*loss
