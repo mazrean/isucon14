@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"database/sql"
 	"errors"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -213,7 +214,7 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 			pd := float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, location.LastLatitude, location.LastLongitude)) / float64(chairModelSpeedCache[ch.Model])
 			dd := float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude))
 			age := int(time.Since(ride.CreatedAt).Milliseconds())
-			loss := float64(age) / 20000
+			loss := math.Pow(float64(age)/10000, 3)
 
 			score := dd - 100*pd + 10000*loss
 
