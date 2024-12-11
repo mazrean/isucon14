@@ -233,6 +233,7 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 		score float64
 	}
 	matches := []match{}
+RIDE_LOOP:
 	for _, ride := range rides {
 		for _, ch := range availableChairs {
 			location, ok, err := getChairLocationFromBadger(ch.ID)
@@ -247,7 +248,7 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 			dist := (float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, location.LastLatitude, location.LastLongitude)) + float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude))*0.3) / float64(chairModelSpeedCache[ch.Model])
 
 			age := int(time.Since(ride.CreatedAt).Milliseconds())
-			score := (500 / (dist + 1)) + float64(age/100)
+			score := (50000 / (dist*10 + 1)) + float64(age/100)
 			if age > 20000 {
 				score -= 10000
 			}
@@ -258,13 +259,23 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 			pickupDistHistgram.WithLabelValues(ch.ID, ride.ID).Observe(float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, location.LastLatitude, location.LastLongitude)))
 			destDistHistgram.WithLabelValues(ch.ID, ride.ID).Observe(float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude)))
 
-			matches = append(matches, match{
-				ride:  &ride,
-				ch:    ch,
-				dist:  dist,
-				age:   age,
-				score: score,
-			})
+			if dist <= 10 {
+				matches = append(matches, match{
+					ride:  &ride,
+					ch:    ch,
+					dist:  dist,
+					age:   age,
+					score: score,
+				})
+			}
+			if len(matches) >= 1000 {
+				slog.Info("matching break",
+					"rides", len(rides),
+					"chairs", len(chairs),
+					"matches", len(matches),
+				)
+				break RIDE_LOOP
+			}
 		}
 	}
 	slices.SortFunc(matches, func(a, b match) int {
