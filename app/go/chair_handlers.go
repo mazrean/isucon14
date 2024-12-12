@@ -299,49 +299,55 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 		err      error
 	)
 	ride, ok := latestRideCache.Load(chair.ID)
-	if ok {
-		status, err = getLatestRideStatusWithID(ctx, db, ride.ID)
-		if err != nil {
-			writeError(w, r, http.StatusInternalServerError, err)
-			return
-		}
+	if !ok {
+		writeJSON(w, http.StatusOK, &chairGetNotificationResponse{
+			RetryAfterMs: 100,
+		})
+		return
+	}
 
-		err = db.GetContext(ctx, user, "SELECT * FROM users WHERE id = ?", ride.UserID)
-		if err != nil {
-			writeError(w, r, http.StatusInternalServerError, err)
-			return
-		}
+	status, err = getLatestRideStatusWithID(ctx, db, ride.ID)
+	if err != nil {
+		writeError(w, r, http.StatusInternalServerError, err)
+		return
+	}
 
-		response = &chairGetNotificationResponseData{
-			RideID: ride.ID,
-			User: simpleUser{
-				ID:   user.ID,
-				Name: fmt.Sprintf("%s %s", user.Firstname, user.Lastname),
-			},
-			PickupCoordinate: Coordinate{
-				Latitude:  ride.PickupLatitude,
-				Longitude: ride.PickupLongitude,
-			},
-			DestinationCoordinate: Coordinate{
-				Latitude:  ride.DestinationLatitude,
-				Longitude: ride.DestinationLongitude,
-			},
-			Status: status.Status,
-		}
+	user = &User{}
+	err = db.GetContext(ctx, user, "SELECT * FROM users WHERE id = ?", ride.UserID)
+	if err != nil {
+		writeError(w, r, http.StatusInternalServerError, err)
+		return
+	}
 
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Connection", "keep-alive")
-		w.Header().Set("X-Accel-Buffering", "no")
+	response = &chairGetNotificationResponseData{
+		RideID: ride.ID,
+		User: simpleUser{
+			ID:   user.ID,
+			Name: fmt.Sprintf("%s %s", user.Firstname, user.Lastname),
+		},
+		PickupCoordinate: Coordinate{
+			Latitude:  ride.PickupLatitude,
+			Longitude: ride.PickupLongitude,
+		},
+		DestinationCoordinate: Coordinate{
+			Latitude:  ride.DestinationLatitude,
+			Longitude: ride.DestinationLongitude,
+		},
+		Status: status.Status,
+	}
 
-		fmt.Fprintf(w, "data: %s\n\n", response.Encode())
-		flusher.Flush()
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
 
-		_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, status.ID)
-		if err != nil {
-			writeError(w, r, http.StatusInternalServerError, err)
-			return
-		}
+	fmt.Fprintf(w, "data: %s\n\n", response.Encode())
+	flusher.Flush()
+
+	_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, status.ID)
+	if err != nil {
+		writeError(w, r, http.StatusInternalServerError, err)
+		return
 	}
 
 	ch := make(chan *RideEvent, 100)
