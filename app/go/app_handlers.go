@@ -618,13 +618,9 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	ride := &Ride{}
-	if err := tx.GetContext(ctx, ride, `SELECT * FROM rides WHERE id = ?`, rideID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			writeError(w, r, http.StatusNotFound, errors.New("ride not found"))
-			return
-		}
-		writeError(w, r, http.StatusInternalServerError, err)
+	ride, exists := rideCache.Load(rideID)
+	if !exists {
+		writeError(w, r, http.StatusNotFound, errors.New("ride not found"))
 		return
 	}
 	status, err := getLatestRideStatus(ctx, tx, ride.ID)
