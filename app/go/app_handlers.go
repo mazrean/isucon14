@@ -163,6 +163,11 @@ func appPostPaymentMethods(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	paymentTokenCache.Store(user.ID, &PaymentToken{
+		UserID: user.ID,
+		Token:  req.Token,
+	})
+
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -559,7 +564,7 @@ type appPostRideEvaluationResponse struct {
 	CompletedAt int64 `json:"completed_at"`
 }
 
-var paymentTokenCache = map[string]*PaymentToken{}
+var paymentTokenCache = isucache.NewAtomicMap[string, *PaymentToken]("paymentTokenCache")
 
 func initPaymentTokenCache() error {
 	paymentTokens := []PaymentToken{}
@@ -568,7 +573,7 @@ func initPaymentTokenCache() error {
 	}
 
 	for _, paymentToken := range paymentTokens {
-		paymentTokenCache[paymentToken.UserID] = &paymentToken
+		paymentTokenCache.Store(paymentToken.UserID, &paymentToken)
 	}
 
 	return nil
@@ -643,7 +648,7 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	paymentToken, exists := paymentTokenCache[ride.UserID]
+	paymentToken, exists := paymentTokenCache.Load(ride.UserID)
 	if !exists {
 		writeError(w, r, http.StatusBadRequest, errors.New("payment token not registered"))
 		return
