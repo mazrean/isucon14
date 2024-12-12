@@ -950,54 +950,12 @@ func getChairStats(ctx context.Context, tx *sqlx.DB, chairID string) (appGetNoti
 		rideIDs[i] = ride.ID
 	}
 
-	// Prepare query with IN clause
-	query, args, err := sqlx.In(
-		`SELECT * FROM ride_statuses WHERE ride_id IN (? ) ORDER BY ride_id, created_at`,
-		rideIDs,
-	)
-	if err != nil {
-		return stats, err
-	}
-
-	// Rebind for the specific database driver
-	query = tx.Rebind(query)
-
-	// Fetch all ride statuses for the collected ride IDs
-	rideStatuses := []RideStatus{}
-	err = tx.SelectContext(ctx, &rideStatuses, query, args...)
-	if err != nil {
-		return stats, err
-	}
-
-	// Group ride statuses by ride_id
-	statusMap := make(map[string][]RideStatus)
-	for _, status := range rideStatuses {
-		statusMap[status.RideID] = append(statusMap[status.RideID], status)
-	}
-
 	totalRideCount := 0
 	totalEvaluation := 0
 
 	for _, ride := range rides {
-		statuses, exists := statusMap[ride.ID]
-		if !exists {
-			continue
-		}
-
-		var arrivedAt, pickupedAt *time.Time
-		var isCompleted bool
-		for _, status := range statuses {
-			switch status.Status {
-			case "ARRIVED":
-				arrivedAt = &status.CreatedAt
-			case "CARRYING":
-				pickupedAt = &status.CreatedAt
-			case "COMPLETED":
-				isCompleted = true
-			}
-		}
-
-		if arrivedAt == nil || pickupedAt == nil || !isCompleted {
+		status, err := getLatestRideStatus(ctx, tx, ride.ID)
+		if err != nil || status != "COMPLETED" {
 			continue
 		}
 
