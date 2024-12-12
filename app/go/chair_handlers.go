@@ -411,13 +411,11 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 				}()
 			}
 
-			go func() {
-				_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, status.ID)
-				if err != nil {
-					writeError(w, r, http.StatusInternalServerError, err)
-					return
-				}
-			}()
+			_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, status.ID)
+			if err != nil {
+				writeError(w, r, http.StatusInternalServerError, err)
+				return
+			}
 		}
 	}
 }
