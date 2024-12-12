@@ -225,7 +225,7 @@ func appGetRides(w http.ResponseWriter, r *http.Request) {
         JOIN chairs c ON r.chair_id = c.id
         JOIN owners o ON c.owner_id = o.id
         WHERE r.user_id = ?
-        ORDER BY r.created_at DESC
+        ORDER BY r.created_at DESC FOR UPDATE
     `, user.ID)
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, err)
