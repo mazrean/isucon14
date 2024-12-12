@@ -190,6 +190,11 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := initPaymentTokenCache(); err != nil {
+		writeError(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
 	benchStartedAt = time.Now()
 
 	writeJSON(w, http.StatusOK, postInitializeResponse{Language: "go"})
