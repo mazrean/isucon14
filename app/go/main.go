@@ -209,8 +209,13 @@ func (c *Coordinate) bindJSON(r *http.Request) error {
 		return nil
 	}
 
-	if _, err := fmt.Sscanf(sb.String(), `{"longitude":%d,"latitude":%d}`, &c.Longitude, &c.Latitude); err != nil {
-		return err
+	if _, err := fmt.Sscanf(sb.String(), `{"longitude":%d,"latitude":%d}`, &c.Longitude, &c.Latitude); err == nil {
+		return nil
+	}
+	slog.Info("bindJSON", slog.String("body", sb.String()))
+
+	if err := json.Unmarshal([]byte(sb.String()), c); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
 	}
 
 	return nil
