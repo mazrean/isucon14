@@ -223,6 +223,11 @@ func appGetRides(w http.ResponseWriter, r *http.Request) {
 
 	items := []getAppRidesResponseItem{}
 	for _, ride := range rides {
+		newRide, exists := rideCache.Load(ride.ID)
+		if exists {
+			ride = *newRide
+		}
+
 		status, exists := rideStatusesCache.Load(ride.ID)
 		if !exists || status.Status != "COMPLETED" {
 			continue
