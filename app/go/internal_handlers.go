@@ -72,7 +72,7 @@ var chairModelSpeedCache = map[string]int{
 }
 
 var (
-	matchingRides     = []Ride{}
+	matchingRides     = []*Ride{}
 	matchingRidesLock = sync.RWMutex{}
 	emptyChairs       = []*Chair{}
 	emptyChairsLocker = sync.RWMutex{}
@@ -135,13 +135,13 @@ func internalGetMatching() {
 	isInBenchmark := !benchStartedAt.IsZero() && benchStartedAt.Add(60*time.Second).After(time.Now())
 
 	// 1. 椅子未割当のrideを全件取得
-	var rides []Ride
+	var rides []*Ride
 	func() {
 		matchingRidesLock.Lock()
 		defer matchingRidesLock.Unlock()
 
 		rides = matchingRides
-		matchingRides = []Ride{}
+		matchingRides = []*Ride{}
 	}()
 
 	if len(rides) == 0 {
@@ -238,7 +238,7 @@ func internalGetMatching() {
 			score := -100*pd + 100000*loss
 
 			matches = append(matches, match{
-				ride:  &ride,
+				ride:  ride,
 				ch:    ch,
 				age:   age,
 				score: score,
