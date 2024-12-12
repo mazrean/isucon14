@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/goccy/go-json"
+	"golang.org/x/sync/errgroup"
 
 	isucache "github.com/mazrean/isucon-go-tools/v2/cache"
 	isuhttp "github.com/mazrean/isucon-go-tools/v2/http"
@@ -144,34 +145,6 @@ type chairPostCoordinateRequest struct {
 	coordinate *Coordinate
 }
 
-var chairPostCoordinateCh = make(chan *chairPostCoordinateRequest, 10000000)
-
-func init() {
-	const worker = 100
-	const limit = 100
-	for range worker {
-		go func() {
-			for {
-				chairIDCoodinateMap := make(map[string]*Coordinate, limit)
-				req := <-chairPostCoordinateCh
-
-				chairIDCoodinateMap[req.chairID] = req.coordinate
-
-				for len(chairIDCoodinateMap) < limit {
-					req, ok := <-chairPostCoordinateCh
-					if !ok {
-						break
-					}
-
-					chairIDCoodinateMap[req.chairID] = req.coordinate
-				}
-
-				updateChairLocationsToBadger(chairIDCoodinateMap)
-			}
-		}()
-	}
-}
-
 var latestRideCache = isucache.NewAtomicMap[string, *Ride]("latestRideCache")
 
 type chairPostCoordinateResponse struct {
@@ -190,10 +163,11 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now()
 
-	chairPostCoordinateCh <- &chairPostCoordinateRequest{
-		chairID:    chair.ID,
-		coordinate: req,
-	}
+	eg := errgroup.Group{}
+
+	eg.Go(func() error {
+		return updateChairLocationToBadger(chair.ID, req)
+	})
 
 	var newStatus *RideStatus
 	var (
@@ -245,6 +219,11 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 			status: newStatus.Status,
 			rideID: ride.ID,
 		})
+	}
+
+	if err := eg.Wait(); err != nil {
+		writeError(w, r, http.StatusInternalServerError, err)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")

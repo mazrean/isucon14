@@ -157,42 +157,40 @@ func getChairLocationFromBadger(chairID string) (*chairLocation, bool, error) {
 	return &location, ok, nil
 }
 
-func updateChairLocationsToBadger(chairIDCoodinateMap map[string]*Coordinate) error {
+func updateChairLocationToBadger(chairID string, coodinate *Coordinate) error {
 	err := badgerDB.Update(func(txn *badger.Txn) error {
-		for chairID, coodinate := range chairIDCoodinateMap {
-			bytesChairID := append([]byte("location"), []byte(chairID)...)
-			item, err := txn.Get(bytesChairID)
-			if err != nil && !errors.Is(err, badger.ErrKeyNotFound) {
-				return fmt.Errorf("failed to get item: %w", err)
+		bytesChairID := append([]byte("location"), []byte(chairID)...)
+		item, err := txn.Get(bytesChairID)
+		if err != nil && !errors.Is(err, badger.ErrKeyNotFound) {
+			return fmt.Errorf("failed to get item: %w", err)
+		}
+
+		var location chairLocation
+		if errors.Is(err, badger.ErrKeyNotFound) {
+			location = chairLocation{
+				TotalDistance:          0,
+				LastLatitude:           coodinate.Latitude,
+				LastLongitude:          coodinate.Longitude,
+				TotalDistanceUpdatedAt: time.Now().UnixMilli(),
 			}
-
-			var location chairLocation
-			if errors.Is(err, badger.ErrKeyNotFound) {
-				location = chairLocation{
-					TotalDistance:          0,
-					LastLatitude:           coodinate.Latitude,
-					LastLongitude:          coodinate.Longitude,
-					TotalDistanceUpdatedAt: time.Now().UnixMilli(),
-				}
-			} else {
-				err = item.Value(func(val []byte) error {
-					location = decodeChairLocation(val)
-					return nil
-				})
-				if err != nil {
-					return fmt.Errorf("failed to get value: %w", err)
-				}
-
-				location.TotalDistance += distance(location.LastLatitude, location.LastLongitude, coodinate.Latitude, coodinate.Longitude)
-				location.LastLatitude = coodinate.Latitude
-				location.LastLongitude = coodinate.Longitude
-				location.TotalDistanceUpdatedAt = time.Now().UnixMilli()
-			}
-
-			err = txn.Set(bytesChairID, encodeChairLocation(&location))
+		} else {
+			err = item.Value(func(val []byte) error {
+				location = decodeChairLocation(val)
+				return nil
+			})
 			if err != nil {
-				return fmt.Errorf("failed to set one time token: %w", err)
+				return fmt.Errorf("failed to get value: %w", err)
 			}
+
+			location.TotalDistance += distance(location.LastLatitude, location.LastLongitude, coodinate.Latitude, coodinate.Longitude)
+			location.LastLatitude = coodinate.Latitude
+			location.LastLongitude = coodinate.Longitude
+			location.TotalDistanceUpdatedAt = time.Now().UnixMilli()
+		}
+
+		err = txn.Set(bytesChairID, encodeChairLocation(&location))
+		if err != nil {
+			return fmt.Errorf("failed to set one time token: %w", err)
 		}
 
 		return nil
