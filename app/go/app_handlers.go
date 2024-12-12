@@ -611,23 +611,23 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var ride *Ride
-	exists := false
-	rideCache.Update(rideID, func(v *Ride) (*Ride, bool) {
-		if v != nil {
-			ride = v
-			exists = true
-			v.Evaluation = &req.Evaluation
-			v.UpdatedAt = now
-		}
-		return v, true
-	})
-	if !exists {
-		writeError(w, r, http.StatusNotFound, errors.New("ride not found"))
+	tx, err := db.Beginx()
+	if err != nil {
+		writeError(w, r, http.StatusInternalServerError, err)
 		return
 	}
+	defer tx.Rollback()
 
-	status, err := getLatestRideStatus(ctx, db, ride.ID)
+	ride := &Ride{}
+	if err := tx.GetContext(ctx, ride, `SELECT * FROM rides WHERE id = ?`, rideID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, r, http.StatusNotFound, errors.New("ride not found"))
+			return
+		}
+		writeError(w, r, http.StatusInternalServerError, err)
+		return
+	}
+	status, err := getLatestRideStatus(ctx, tx, ride.ID)
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, err)
 		return
@@ -637,13 +637,6 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusBadRequest, errors.New("not arrived yet"))
 		return
 	}
-
-	tx, err := db.Beginx()
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
-		return
-	}
-	defer tx.Rollback()
 
 	result, err := tx.ExecContext(
 		ctx,
