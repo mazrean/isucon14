@@ -208,7 +208,7 @@ func appGetRides(w http.ResponseWriter, r *http.Request) {
 	if err := tx.SelectContext(
 		ctx,
 		&rides,
-		`SELECT * FROM rides WHERE user_id = ? ORDER BY created_at DESC`,
+		`SELECT * FROM rides WHERE user_id = ? ORDER BY created_at DESC FOR UPDATE`,
 		user.ID,
 	); err != nil {
 		writeError(w, r, http.StatusInternalServerError, err)
@@ -637,6 +637,8 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusNotFound, errors.New("ride not found"))
 		return
 	}
+	ride.Evaluation = &req.Evaluation
+	ride.UpdatedAt = now
 
 	statusID := ulid.Make().String()
 	_, err = tx.ExecContext(
@@ -647,9 +649,6 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusInternalServerError, err)
 		return
 	}
-
-	ride.Evaluation = &req.Evaluation
-	ride.UpdatedAt = now
 
 	paymentToken, exists := paymentTokenCache.Load(ride.UserID)
 	if !exists {
@@ -700,7 +699,7 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 	})
 
 	writeJSON(w, http.StatusOK, &appPostRideEvaluationResponse{
-		CompletedAt: ride.UpdatedAt.UnixMilli(),
+		CompletedAt: now.UnixMilli(),
 	})
 }
 
