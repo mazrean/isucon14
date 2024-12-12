@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
+	isucache "github.com/mazrean/isucon-go-tools/v2/cache"
 )
 
 const badgerDir = "../badger/"
@@ -124,10 +125,19 @@ func decodeChairLocation(data []byte) chairLocation {
 	return location
 }
 
+var (
+	locationCache = isucache.NewAtomicMap[string, *chairLocation]("location")
+)
+
 func getChairLocationsFromBadger(chairIDs []string) (map[string]*chairLocation, error) {
 	locations := make(map[string]*chairLocation, len(chairIDs))
 	err := badgerDB.View(func(txn *badger.Txn) error {
 		for _, chairID := range chairIDs {
+			if location, ok := locationCache.Load(chairID); ok {
+				locations[chairID] = location
+				continue
+			}
+
 			bytesChairID := append([]byte("location"), []byte(chairID)...)
 			item, err := txn.Get(bytesChairID)
 			if errors.Is(err, badger.ErrKeyNotFound) {
@@ -145,6 +155,8 @@ func getChairLocationsFromBadger(chairIDs []string) (map[string]*chairLocation, 
 			if err != nil {
 				return fmt.Errorf("failed to get value: %w", err)
 			}
+
+			locationCache.Store(chairID, locations[chairID])
 		}
 
 		return nil
@@ -157,6 +169,10 @@ func getChairLocationsFromBadger(chairIDs []string) (map[string]*chairLocation, 
 }
 
 func getChairLocationFromBadger(chairID string) (*chairLocation, bool, error) {
+	if location, ok := locationCache.Load(chairID); ok {
+		return location, true, nil
+	}
+
 	var (
 		location chairLocation
 		ok       bool
@@ -180,6 +196,8 @@ func getChairLocationFromBadger(chairID string) (*chairLocation, bool, error) {
 		if err != nil {
 			return fmt.Errorf("failed to get value: %w", err)
 		}
+
+		locationCache.Store(chairID, &location)
 		return nil
 	})
 	if err != nil {
@@ -224,6 +242,7 @@ func updateChairLocationToBadger(chairID string, coodinate *Coordinate) error {
 		if err != nil {
 			return fmt.Errorf("failed to set one time token: %w", err)
 		}
+		locationCache.Store(chairID, &location)
 
 		return nil
 	})
