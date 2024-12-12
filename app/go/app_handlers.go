@@ -559,6 +559,21 @@ type appPostRideEvaluationResponse struct {
 	CompletedAt int64 `json:"completed_at"`
 }
 
+var paymentTokenCache = map[string]*PaymentToken{}
+
+func initPaymentTokenCache() error {
+	paymentTokens := []PaymentToken{}
+	if err := db.Select(&paymentTokens, "SELECT * FROM payment_tokens"); err != nil {
+		return err
+	}
+
+	for _, paymentToken := range paymentTokens {
+		paymentTokenCache[paymentToken.UserID] = &paymentToken
+	}
+
+	return nil
+}
+
 func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	rideID := r.PathValue("ride_id")
@@ -628,13 +643,9 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	paymentToken := &PaymentToken{}
-	if err := tx.GetContext(ctx, paymentToken, `SELECT * FROM payment_tokens WHERE user_id = ?`, ride.UserID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			writeError(w, r, http.StatusBadRequest, errors.New("payment token not registered"))
-			return
-		}
-		writeError(w, r, http.StatusInternalServerError, err)
+	paymentToken, exists := paymentTokenCache[ride.UserID]
+	if !exists {
+		writeError(w, r, http.StatusBadRequest, errors.New("payment token not registered"))
 		return
 	}
 
@@ -647,13 +658,7 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 		Amount: fare,
 	}
 
-	if err := requestPaymentGatewayPostPayment(ctx, paymentGatewayURL, paymentToken.Token, paymentGatewayRequest, func() ([]Ride, error) {
-		rides := []Ride{}
-		if err := tx.SelectContext(ctx, &rides, `SELECT * FROM rides WHERE user_id = ? ORDER BY created_at ASC`, ride.UserID); err != nil {
-			return nil, err
-		}
-		return rides, nil
-	}); err != nil {
+	if err := requestPaymentGatewayPostPayment(ctx, paymentGatewayURL, paymentToken.Token, paymentGatewayRequest); err != nil {
 		if errors.Is(err, erroredUpstream) {
 			writeError(w, r, http.StatusBadGateway, err)
 			return

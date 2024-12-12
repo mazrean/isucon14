@@ -54,6 +54,10 @@ func main() {
 		panic(err)
 	}
 
+	if err := initPaymentTokenCache(); err != nil {
+		panic(err)
+	}
+
 	isuhttp.ListenAndServe(":8080", mux)
 }
 
