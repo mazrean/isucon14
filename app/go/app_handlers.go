@@ -365,6 +365,7 @@ func appPostRides(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	time.Sleep(10 * time.Millisecond)
 	now := time.Now()
 
 	user := ctx.Value("user").(*User)
