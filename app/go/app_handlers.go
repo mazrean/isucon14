@@ -611,14 +611,14 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var ride Ride
+	var ride *Ride
 	exists := false
 	rideCache.Update(rideID, func(v *Ride) (*Ride, bool) {
 		if v == nil {
 			return nil, false
 		}
 
-		ride = *v
+		ride = v
 		exists = true
 		ride.Evaluation = &req.Evaluation
 		ride.UpdatedAt = now
@@ -628,7 +628,7 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusNotFound, errors.New("ride not found"))
 		return
 	}
-	status, err := getLatestRideStatus(ctx, tx, ride.ID)
+	status, err := getLatestRideStatus(ctx, db, ride.ID)
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, err)
 		return
