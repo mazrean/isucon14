@@ -72,6 +72,8 @@ var chairModelSpeedCache = map[string]int{
 }
 
 var (
+	matchingRides     = []Ride{}
+	matchingRidesLock = sync.RWMutex{}
 	emptyChairs       = []*Chair{}
 	emptyChairsLocker = sync.RWMutex{}
 	benchStartedAt    = time.Time{}
@@ -134,21 +136,13 @@ func internalGetMatching() {
 
 	// 1. 椅子未割当のrideを全件取得
 	var rides []Ride
-	if err := db.SelectContext(ctx, &rides, `
-        SELECT *
-        FROM rides
-        WHERE chair_id IS NULL
-        ORDER BY created_at
-    `); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			slog.Info("no rides to match")
-			return
-		}
-		slog.Error("failed to select rides",
-			slog.String("error", err.Error()),
-		)
-		return
-	}
+	func() {
+		matchingRidesLock.Lock()
+		defer matchingRidesLock.Unlock()
+
+		rides = matchingRides
+		matchingRides = []Ride{}
+	}()
 
 	if len(rides) == 0 {
 		slog.Info("no rides to match")

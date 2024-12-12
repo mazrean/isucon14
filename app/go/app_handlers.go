@@ -486,6 +486,12 @@ func appPostRides(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	func() {
+		matchingRidesLock.Lock()
+		defer matchingRidesLock.Unlock()
+
+		matchingRides = append(matchingRides, ride)
+	}()
 	rideCache.Store(rideID, &ride)
 	rideStatusesCache.Store(rideID, &RideStatus{
 		ID:     statusID,
