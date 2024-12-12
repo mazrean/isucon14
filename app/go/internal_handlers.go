@@ -265,12 +265,15 @@ func internalGetMatching() {
 			continue
 		}
 
-		if _, err := db.ExecContext(ctx, "UPDATE rides SET chair_id = ?, updated_at = ? WHERE id = ?", m.ch.ID, time.Now(), m.ride.ID); err != nil {
+		now := time.Now()
+		if _, err := db.ExecContext(ctx, "UPDATE rides SET chair_id = ?, updated_at = ? WHERE id = ?", m.ch.ID, now, m.ride.ID); err != nil {
 			slog.Error("failed to update ride",
 				slog.String("error", err.Error()),
 			)
 			return
 		}
+		m.ride.ChairID = sql.NullString{String: m.ch.ID, Valid: true}
+		m.ride.UpdatedAt = now
 
 		rideCache.Store(m.ride.ID, m.ride)
 		latestRideCache.Store(m.ch.ID, m.ride)
