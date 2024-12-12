@@ -212,11 +212,11 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 		rideStatusesCache.Store(ride.ID, newStatus)
 		ChairPublish(chair.ID, &RideEvent{
 			status: newStatus.Status,
-			rideID: ride.ID,
+			ride:   ride,
 		})
 		UserPublish(ride.UserID, &RideEvent{
 			status: newStatus.Status,
-			rideID: ride.ID,
+			ride:   ride,
 		})
 	}
 
@@ -360,14 +360,7 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 			return
 		case event := <-ch:
 			if event.status == "MATCHED" {
-				ride, ok = latestRideCache.Load(chair.ID)
-				if !ok {
-					w.Header().Set("Content-Type", "application/json;charset=utf-8")
-					w.WriteHeader(http.StatusOK)
-					w.Write(appGetNotificationRes)
-					return
-				}
-
+				ride = event.ride
 				status, err = getLatestRideStatusWithID(ctx, db, ride.ID)
 				if err != nil {
 					writeError(w, r, http.StatusInternalServerError, err)
@@ -507,11 +500,11 @@ func chairPostRideStatus(w http.ResponseWriter, r *http.Request) {
 
 	ChairPublish(chair.ID, &RideEvent{
 		status: req.Status,
-		rideID: ride.ID,
+		ride:   ride,
 	})
 	UserPublish(ride.UserID, &RideEvent{
 		status: req.Status,
-		rideID: ride.ID,
+		ride:   ride,
 	})
 
 	w.WriteHeader(http.StatusNoContent)

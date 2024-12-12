@@ -513,7 +513,7 @@ func appPostRides(w http.ResponseWriter, r *http.Request) {
 	UserPublish(ride.UserID, &RideEvent{
 		status:    "MATCHING",
 		updatedAt: now,
-		rideID:    rideID,
+		ride:      &ride,
 	})
 
 	writeJSON(w, http.StatusAccepted, &appPostRidesResponse{
@@ -739,13 +739,13 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 		status:     "COMPLETED",
 		evaluation: req.Evaluation,
 		updatedAt:  now,
-		rideID:     rideID,
+		ride:       ride,
 	})
 	UserPublish(ride.UserID, &RideEvent{
 		status:     "COMPLETED",
 		evaluation: req.Evaluation,
 		updatedAt:  now,
-		rideID:     rideID,
+		ride:       ride,
 	})
 
 	writeJSON(w, http.StatusOK, &appPostRideEvaluationResponse{
@@ -877,16 +877,7 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 		case event := <-ch:
 			switch event.status {
 			case "MATCHING":
-				if err := db.GetContext(ctx, ride, `SELECT * FROM rides WHERE id = ?`, event.rideID); err != nil {
-					if errors.Is(err, sql.ErrNoRows) {
-						writeJSON(w, http.StatusOK, &chairGetNotificationResponse{
-							RetryAfterMs: 100,
-						})
-						return
-					}
-					writeError(w, r, http.StatusInternalServerError, err)
-					return
-				}
+				ride = event.ride
 
 				fare, err := calculateDiscountedFareDB(ctx, db, user.ID, ride, ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude)
 				if err != nil {
@@ -907,13 +898,8 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 			case "ENROUTE", "PICKUP", "CARRYING", "ARRIVED":
 				response.Status = event.status
 			case "MATCHED":
-				chair := &Chair{}
-				if err := db.GetContext(ctx, chair, `SELECT * FROM chairs WHERE id = ?`, event.chairID); err != nil {
-					writeError(w, r, http.StatusInternalServerError, err)
-					return
-				}
-
-				stats, err = getChairStats(ctx, db, event.chairID)
+				chair := event.chair
+				stats, err = getChairStats(ctx, db, chair.ID)
 				if err != nil {
 					writeError(w, r, http.StatusInternalServerError, err)
 					return

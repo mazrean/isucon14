@@ -224,8 +224,8 @@ func internalGetMatching() {
 			dd := float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude))
 			age := int(time.Since(ride.CreatedAt).Milliseconds())
 			loss := math.Pow(float64(age)/10000, 2)
-			// 20s以上経過しているrideは優先度を大きく上げる
-			if age > 20000 {
+			// 25s以上経過しているrideは優先度を大きく上げる
+			if age > 22000 {
 				loss += 100000
 			}
 
@@ -272,14 +272,14 @@ func internalGetMatching() {
 		rideCache.Store(m.ride.ID, m.ride)
 		latestRideCache.Store(m.ch.ID, m.ride)
 		ChairPublish(m.ch.ID, &RideEvent{
-			status:  "MATCHED",
-			chairID: m.ch.ID,
-			rideID:  m.ride.ID,
+			status: "MATCHED",
+			chair:  m.ch,
+			ride:   m.ride,
 		})
 		UserPublish(m.ride.UserID, &RideEvent{
-			status:  "MATCHED",
-			chairID: m.ch.ID,
-			rideID:  m.ride.ID,
+			status: "MATCHED",
+			chair:  m.ch,
+			ride:   m.ride,
 		})
 		matchedChairIDMap[m.ch.ID] = struct{}{}
 		matchedRideIDMap[m.ride.ID] = struct{}{}
