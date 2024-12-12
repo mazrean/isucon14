@@ -648,6 +648,15 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := tx.GetContext(ctx, ride, `SELECT * FROM rides WHERE id = ?`, rideID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, r, http.StatusNotFound, errors.New("ride not found"))
+			return
+		}
+		writeError(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
 	paymentToken, exists := paymentTokenCache.Load(ride.UserID)
 	if !exists {
 		writeError(w, r, http.StatusBadRequest, errors.New("payment token not registered"))
