@@ -2,11 +2,10 @@ package main
 
 import (
 	"cmp"
+	"context"
 	"database/sql"
 	"errors"
 	"math"
-	"net/http"
-	"net/http/httptest"
 	"slices"
 	"sync"
 	"time"
@@ -117,15 +116,15 @@ func init() {
 				return len(emptyChairs) > 0
 			}()
 			if isChairExist {
-				internalGetMatching(httptest.NewRecorder(), &http.Request{})
+				internalGetMatching()
 			}
 		}
 	}()
 }
 
 // このAPIをインスタンス内から一定間隔で叩かせることで、椅子とライドをマッチングさせる
-func internalGetMatching(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+func internalGetMatching() {
+	ctx := context.Background()
 
 	isInBenchmark := !benchStartedAt.IsZero() && benchStartedAt.Add(60*time.Second).After(time.Now())
 
@@ -138,15 +137,17 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
         ORDER BY created_at
     `); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			w.WriteHeader(http.StatusNoContent)
+			slog.Info("no rides to match")
 			return
 		}
-		writeError(w, r, http.StatusInternalServerError, err)
+		slog.Error("failed to select rides",
+			slog.String("error", err.Error()),
+		)
 		return
 	}
 
 	if len(rides) == 0 {
-		w.WriteHeader(http.StatusNoContent)
+		slog.Info("no rides to match")
 		return
 	}
 
@@ -176,7 +177,7 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 
 	if len(chairs) == 0 {
 		// 空き椅子なし
-		w.WriteHeader(http.StatusNoContent)
+		slog.Info("no empty chairs")
 		return
 	}
 
@@ -212,7 +213,9 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 		for _, ch := range availableChairs {
 			location, ok, err := getChairLocationFromBadger(ch.ID)
 			if err != nil {
-				writeError(w, r, http.StatusInternalServerError, err)
+				slog.Error("failed to get chair location from badger",
+					slog.String("error", err.Error()),
+				)
 				return
 			}
 			if !ok {
@@ -259,7 +262,9 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if _, err := db.ExecContext(ctx, "UPDATE rides SET chair_id = ?, updated_at = ? WHERE id = ?", m.ch.ID, time.Now(), m.ride.ID); err != nil {
-			writeError(w, r, http.StatusInternalServerError, err)
+			slog.Error("failed to update ride",
+				slog.String("error", err.Error()),
+			)
 			return
 		}
 
@@ -295,6 +300,4 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}()
-
-	w.WriteHeader(http.StatusNoContent)
 }
