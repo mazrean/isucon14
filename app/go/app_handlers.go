@@ -204,79 +204,63 @@ func appGetRides(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	// JOINを用いて一括で取得するための構造体
-	type RideDetails struct {
-		Ride
-		ChairName  string `db:"c_name"`
-		ChairModel string `db:"c_model"`
-		OwnerName  string `db:"o_name"`
-	}
-
-	// JOINを使用したクエリ。r.*でrideのカラム、c.name, c.model, o.nameを
-	// 適宜エイリアスをつけて取得する
-	var rideDetailsList []RideDetails
-	err = tx.SelectContext(ctx, &rideDetailsList, `
-        SELECT 
-            r.*,
-            c.name AS c_name,
-            c.model AS c_model,
-            o.name AS o_name
-        FROM rides r
-        JOIN chairs c ON r.chair_id = c.id
-        JOIN owners o ON c.owner_id = o.id
-        WHERE r.user_id = ?
-        ORDER BY r.created_at DESC FOR UPDATE
-    `, user.ID)
-	if err != nil {
+	rides := []Ride{}
+	if err := tx.SelectContext(
+		ctx,
+		&rides,
+		`SELECT * FROM rides WHERE user_id = ? ORDER BY created_at DESC FOR UPDATE`,
+		user.ID,
+	); err != nil {
 		writeError(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
+	// Collect all ride IDs
+	rideIDs := make([]string, len(rides))
+	for i, ride := range rides {
+		rideIDs[i] = ride.ID
+	}
+
 	items := []getAppRidesResponseItem{}
-	for _, rd := range rideDetailsList {
-		// キャッシュからステータス取得
-		status, exists := rideStatusesCache.Load(rd.ID)
+	for _, ride := range rides {
+		status, exists := rideStatusesCache.Load(ride.ID)
 		if !exists || status.Status != "COMPLETED" {
 			continue
 		}
 
-		fare, err := calculateDiscountedFare(
-			ctx,
-			tx,
-			user.ID,
-			&rd.Ride,
-			rd.PickupLatitude,
-			rd.PickupLongitude,
-			rd.DestinationLatitude,
-			rd.DestinationLongitude,
-		)
+		fare, err := calculateDiscountedFare(ctx, tx, user.ID, &ride, ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude)
 		if err != nil {
 			writeError(w, r, http.StatusInternalServerError, err)
 			return
 		}
 
 		item := getAppRidesResponseItem{
-			ID: rd.ID,
-			PickupCoordinate: Coordinate{
-				Latitude:  rd.PickupLatitude,
-				Longitude: rd.PickupLongitude,
-			},
-			DestinationCoordinate: Coordinate{
-				Latitude:  rd.DestinationLatitude,
-				Longitude: rd.DestinationLongitude,
-			},
-			Fare:        fare,
-			Evaluation:  *rd.Evaluation,
-			RequestedAt: rd.CreatedAt.UnixMilli(),
-			CompletedAt: rd.UpdatedAt.UnixMilli(),
+			ID:                    ride.ID,
+			PickupCoordinate:      Coordinate{Latitude: ride.PickupLatitude, Longitude: ride.PickupLongitude},
+			DestinationCoordinate: Coordinate{Latitude: ride.DestinationLatitude, Longitude: ride.DestinationLongitude},
+			Fare:                  fare,
+			Evaluation:            *ride.Evaluation,
+			RequestedAt:           ride.CreatedAt.UnixMilli(),
+			CompletedAt:           ride.UpdatedAt.UnixMilli(),
 		}
 
-		item.Chair = getAppRidesResponseItemChair{
-			ID:    rd.ChairID.String,
-			Name:  rd.ChairName,
-			Model: rd.ChairModel,
-			Owner: rd.OwnerName,
+		item.Chair = getAppRidesResponseItemChair{}
+
+		chair := &Chair{}
+		if err := tx.GetContext(ctx, chair, `SELECT * FROM chairs WHERE id = ?`, ride.ChairID); err != nil {
+			writeError(w, r, http.StatusInternalServerError, err)
+			return
 		}
+		item.Chair.ID = chair.ID
+		item.Chair.Name = chair.Name
+		item.Chair.Model = chair.Model
+
+		owner := &Owner{}
+		if err := tx.GetContext(ctx, owner, `SELECT * FROM owners WHERE id = ?`, chair.OwnerID); err != nil {
+			writeError(w, r, http.StatusInternalServerError, err)
+			return
+		}
+		item.Chair.Owner = owner.Name
 
 		items = append(items, item)
 	}
@@ -496,6 +480,7 @@ func appPostRides(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	rideCache.Store(rideID, &ride)
 	rideStatusesCache.Store(rideID, &RideStatus{
 		ID:     statusID,
 		RideID: rideID,
@@ -595,6 +580,21 @@ func initPaymentTokenCache() error {
 	return nil
 }
 
+var rideCache = isucache.NewAtomicMap[string, *Ride]("rideCache")
+
+func initRideCache() error {
+	rides := []Ride{}
+	if err := db.Select(&rides, "SELECT * FROM rides"); err != nil {
+		return err
+	}
+
+	for _, ride := range rides {
+		rideCache.Store(ride.ID, &ride)
+	}
+
+	return nil
+}
+
 func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	rideID := r.PathValue("ride_id")
@@ -618,15 +618,12 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	ride := &Ride{}
-	if err := tx.GetContext(ctx, ride, `SELECT * FROM rides WHERE id = ?`, rideID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			writeError(w, r, http.StatusNotFound, errors.New("ride not found"))
-			return
-		}
-		writeError(w, r, http.StatusInternalServerError, err)
+	ride, exists := rideCache.Load(rideID)
+	if !exists {
+		writeError(w, r, http.StatusNotFound, errors.New("ride not found"))
 		return
 	}
+
 	status, err := getLatestRideStatus(ctx, tx, ride.ID)
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, err)
@@ -695,6 +692,7 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	rideCache.Store(rideID, ride)
 	rideStatusesCache.Store(rideID, &RideStatus{
 		ID:     statusID,
 		RideID: rideID,
@@ -1085,6 +1083,10 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 
 		// Get the latest ChairLocation
 		chairLocation, exists := chairLocationMap[chair.ID]
+		if err != nil {
+			writeError(w, r, http.StatusInternalServerError, err)
+			return
+		}
 		if !exists {
 			continue
 		}

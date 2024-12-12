@@ -58,6 +58,10 @@ func main() {
 		panic(err)
 	}
 
+	if err := initRideCache(); err != nil {
+		panic(err)
+	}
+
 	isuhttp.ListenAndServe(":8080", mux)
 }
 
@@ -186,6 +190,11 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := initPaymentTokenCache(); err != nil {
+		writeError(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	if err := initRideCache(); err != nil {
 		writeError(w, r, http.StatusInternalServerError, err)
 		return
 	}

@@ -272,6 +272,7 @@ func internalGetMatching() {
 			return
 		}
 
+		rideCache.Store(m.ride.ID, m.ride)
 		latestRideCache.Store(m.ch.ID, m.ride)
 		ChairPublish(m.ch.ID, &RideEvent{
 			status:  "MATCHED",
