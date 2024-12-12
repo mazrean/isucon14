@@ -402,6 +402,12 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "data: %s\n\n", response.Encode())
 			flusher.Flush()
 
+			_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, status.ID)
+			if err != nil {
+				writeError(w, r, http.StatusInternalServerError, err)
+				return
+			}
+
 			if status.Status == "COMPLETED" {
 				go func() {
 					emptyChairsLocker.Lock()
@@ -410,14 +416,6 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 					emptyChairs = append(emptyChairs, chair)
 				}()
 			}
-
-			go func() {
-				_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, status.ID)
-				if err != nil {
-					writeError(w, r, http.StatusInternalServerError, err)
-					return
-				}
-			}()
 		}
 	}
 }
