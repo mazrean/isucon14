@@ -268,7 +268,7 @@ func (nrd *chairGetNotificationResponseData) Encode() string {
 	sb.WriteString(nrd.User.ID)
 	sb.WriteString(`","name":"`)
 	sb.WriteString(nrd.User.Name)
-	sb.WriteString(`},"pickup_coordinate":{"latitude":`)
+	sb.WriteString(`"},"pickup_coordinate":{"latitude":`)
 	sb.WriteString(fmt.Sprint(nrd.PickupCoordinate.Latitude))
 	sb.WriteString(`,"longitude":`)
 	sb.WriteString(fmt.Sprint(nrd.PickupCoordinate.Longitude))
