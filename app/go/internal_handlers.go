@@ -108,15 +108,19 @@ HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0
 func init() {
 	ticker := time.NewTicker(50 * time.Millisecond)
 	go func() {
+		isSkiped := false
 		for range ticker.C {
 			isChairExist := func() bool {
 				emptyChairsLocker.RLock()
 				defer emptyChairsLocker.RUnlock()
 
-				return len(emptyChairs) > 0
+				return len(emptyChairs) > 5 || isSkiped
 			}()
 			if isChairExist {
+				isSkiped = false
 				internalGetMatching()
+			} else {
+				isSkiped = true
 			}
 		}
 	}()
