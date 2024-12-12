@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/goccy/go-json"
 	"golang.org/x/sync/errgroup"
 
 	isucache "github.com/mazrean/isucon-go-tools/v2/cache"
@@ -261,6 +260,28 @@ type chairGetNotificationResponseData struct {
 	Status                string     `json:"status"`
 }
 
+func (nrd *chairGetNotificationResponseData) Encode() string {
+	sb := &strings.Builder{}
+	sb.WriteString(`{"ride_id":"`)
+	sb.WriteString(nrd.RideID)
+	sb.WriteString(`","user":{"id":"`)
+	sb.WriteString(nrd.User.ID)
+	sb.WriteString(`","name":"`)
+	sb.WriteString(nrd.User.Name)
+	sb.WriteString(`},"pickup_coordinate":{"latitude":`)
+	sb.WriteString(fmt.Sprint(nrd.PickupCoordinate.Latitude))
+	sb.WriteString(`,"longitude":`)
+	sb.WriteString(fmt.Sprint(nrd.PickupCoordinate.Longitude))
+	sb.WriteString(`},"destination_coordinate":{"latitude":`)
+	sb.WriteString(fmt.Sprint(nrd.DestinationCoordinate.Latitude))
+	sb.WriteString(`,"longitude":`)
+	sb.WriteString(fmt.Sprint(nrd.DestinationCoordinate.Longitude))
+	sb.WriteString(`},"status":"`)
+	sb.WriteString(nrd.Status)
+	sb.WriteString(`"}`)
+	return sb.String()
+}
+
 func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -314,13 +335,7 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	sb := &strings.Builder{}
-	err = json.NewEncoder(sb).Encode(response)
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, fmt.Errorf("failed to encode response: %w", err))
-		return
-	}
-	fmt.Fprintf(w, "data: %s\n", sb.String())
+	fmt.Fprintf(w, "data: %s\n", response.Encode())
 	flusher.Flush()
 
 	_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, status.ID)
@@ -384,13 +399,7 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 				response.Status = status.Status
 			}
 
-			sb := &strings.Builder{}
-			err = json.NewEncoder(sb).Encode(response)
-			if err != nil {
-				writeError(w, r, http.StatusInternalServerError, fmt.Errorf("failed to encode response: %w", err))
-				return
-			}
-			fmt.Fprintf(w, "data: %s\n", sb.String())
+			fmt.Fprintf(w, "data: %s\n", response.Encode())
 			flusher.Flush()
 
 			if status.Status == "COMPLETED" {
@@ -402,11 +411,13 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 				}()
 			}
 
-			_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, status.ID)
-			if err != nil {
-				writeError(w, r, http.StatusInternalServerError, err)
-				return
-			}
+			go func() {
+				_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, status.ID)
+				if err != nil {
+					writeError(w, r, http.StatusInternalServerError, err)
+					return
+				}
+			}()
 		}
 	}
 }
