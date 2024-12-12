@@ -1022,7 +1022,7 @@ func init() {
 			return nil, err
 		}
 		return chairs, nil
-	}, 0, 100*time.Millisecond)
+	}, 0, 500*time.Millisecond)
 	if err != nil {
 		panic(err)
 	}
