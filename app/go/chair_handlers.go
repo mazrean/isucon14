@@ -335,7 +335,7 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	fmt.Fprintf(w, "data: %s\n", response.Encode())
+	fmt.Fprintf(w, "data: %s\n\n", response.Encode())
 	flusher.Flush()
 
 	_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, status.ID)
@@ -399,7 +399,7 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 				response.Status = status.Status
 			}
 
-			fmt.Fprintf(w, "data: %s\n", response.Encode())
+			fmt.Fprintf(w, "data: %s\n\n", response.Encode())
 			flusher.Flush()
 
 			if status.Status == "COMPLETED" {
@@ -411,11 +411,13 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 				}()
 			}
 
-			_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, status.ID)
-			if err != nil {
-				writeError(w, r, http.StatusInternalServerError, err)
-				return
-			}
+			go func() {
+				_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, status.ID)
+				if err != nil {
+					writeError(w, r, http.StatusInternalServerError, err)
+					return
+				}
+			}()
 		}
 	}
 }
