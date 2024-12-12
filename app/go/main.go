@@ -249,7 +249,7 @@ func (c *Coordinate) bindJSON(r *http.Request) error {
 		}
 	}
 
-	if err := json.Unmarshal([]byte(sb.String()), c); err != nil {
+	if err := json.Unmarshal(*buf, c); err != nil {
 		return fmt.Errorf("failed to unmarshal: %w", err)
 	}
 
