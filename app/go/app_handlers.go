@@ -695,6 +695,7 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	rideCache.Store(rideID, ride)
 	rideStatusesCache.Store(rideID, &RideStatus{
 		ID:     statusID,
 		RideID: rideID,
