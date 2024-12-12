@@ -370,7 +370,7 @@ func appPostRides(w http.ResponseWriter, r *http.Request) {
 		defer matchingRidesLock.RUnlock()
 
 		if len(matchingRides) > 50 {
-			time.Sleep(50 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 		}
 	}()
 	now := time.Now()
