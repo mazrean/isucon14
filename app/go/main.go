@@ -3,12 +3,14 @@ package main
 import (
 	crand "crypto/rand"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/goccy/go-json"
@@ -195,6 +197,23 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 type Coordinate struct {
 	Latitude  int `json:"latitude"`
 	Longitude int `json:"longitude"`
+}
+
+func (c *Coordinate) bindJSON(r *http.Request) error {
+	sb := &strings.Builder{}
+	if _, err := io.Copy(sb, r.Body); err != nil {
+		return err
+	}
+
+	if _, err := fmt.Sscanf(sb.String(), `{"latitude":%d,"longitude":%d}`, &c.Latitude, &c.Longitude); err == nil {
+		return nil
+	}
+
+	if _, err := fmt.Sscanf(sb.String(), `{"longitude":%d,"latitude":%d}`, &c.Longitude, &c.Latitude); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func bindJSON(r *http.Request, v interface{}) error {

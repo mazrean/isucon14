@@ -153,8 +153,8 @@ type chairPostCoordinateResponse struct {
 func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	req := &Coordinate{}
-	if err := bindJSON(r, req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
+	if err := req.bindJSON(r); err != nil {
+		writeError(w, r, http.StatusBadRequest, err)
 		return
 	}
 
