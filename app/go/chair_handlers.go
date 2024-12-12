@@ -282,6 +282,8 @@ func (nrd *chairGetNotificationResponseData) Encode() string {
 	return sb.String()
 }
 
+var appGetNotificationRes = []byte(`{"retry_after_ms":50}`)
+
 func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -300,9 +302,9 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 	)
 	ride, ok := latestRideCache.Load(chair.ID)
 	if !ok {
-		writeJSON(w, http.StatusOK, &chairGetNotificationResponse{
-			RetryAfterMs: 100,
-		})
+		w.Header().Set("Content-Type", "application/json;charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		w.Write(appGetNotificationRes)
 		return
 	}
 
@@ -360,9 +362,9 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 			if event.status == "MATCHED" {
 				ride, ok = latestRideCache.Load(chair.ID)
 				if !ok {
-					writeJSON(w, http.StatusOK, &chairGetNotificationResponse{
-						RetryAfterMs: 100,
-					})
+					w.Header().Set("Content-Type", "application/json;charset=utf-8")
+					w.WriteHeader(http.StatusOK)
+					w.Write(appGetNotificationRes)
 					return
 				}
 
