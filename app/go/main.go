@@ -3,7 +3,6 @@ package main
 import (
 	crand "crypto/rand"
 	"fmt"
-	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -12,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/goccy/go-json"
 
@@ -23,6 +23,7 @@ import (
 	isutools "github.com/mazrean/isucon-go-tools/v2"
 	isudb "github.com/mazrean/isucon-go-tools/v2/db"
 	isuhttp "github.com/mazrean/isucon-go-tools/v2/http"
+	isupool "github.com/mazrean/isucon-go-tools/v2/pool"
 	isuqueue "github.com/mazrean/isucon-go-tools/v2/queue"
 )
 
@@ -209,20 +210,44 @@ type Coordinate struct {
 	Longitude int `json:"longitude"`
 }
 
+var bufPool = isupool.NewSlice("buf", func() *[]byte {
+	buf := make([]byte, 128)
+	return &buf
+})
+
 func (c *Coordinate) bindJSON(r *http.Request) error {
-	sb := &strings.Builder{}
-	if _, err := io.Copy(sb, r.Body); err != nil {
+	buf := bufPool.Get()
+	defer bufPool.Put(buf)
+
+	if _, err := r.Body.Read(*buf); err != nil {
 		return err
 	}
 
-	if _, err := fmt.Sscanf(sb.String(), `{"latitude":%d,"longitude":%d}`, &c.Latitude, &c.Longitude); err == nil {
-		return nil
-	}
+	str := unsafe.String(&(*buf)[0], len(*buf))
+	str = strings.TrimPrefix(str, "{")
+	str = strings.TrimSuffix(str, "}")
+	str = strings.TrimSpace(str)
+	left, right, found := strings.Cut(str, ",")
+	if found {
+		var latStr, lonStr string
+		if strings.HasPrefix(left, `"latitude":`) && strings.HasPrefix(right, `"longitude":`) {
+			latStr = left
+			lonStr = right
+		} else if strings.HasPrefix(left, `"longitude":`) && strings.HasPrefix(right, `"latitude":`) {
+			latStr = right
+			lonStr = left
+		}
 
-	if _, err := fmt.Sscanf(sb.String(), `{"longitude":%d,"latitude":%d}`, &c.Longitude, &c.Latitude); err == nil {
-		return nil
+		if latStr != "" && lonStr != "" {
+			lat, latErr := strconv.Atoi(strings.TrimPrefix(left, `"latitude":`))
+			lon, lonErr := strconv.Atoi(strings.TrimPrefix(right, `"longitude":`))
+			if latErr == nil && lonErr != nil {
+				c.Latitude = lat
+				c.Longitude = lon
+				return nil
+			}
+		}
 	}
-	slog.Info("bindJSON", slog.String("body", sb.String()))
 
 	if err := json.Unmarshal([]byte(sb.String()), c); err != nil {
 		return fmt.Errorf("failed to unmarshal: %w", err)

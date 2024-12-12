@@ -661,8 +661,6 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusNotFound, errors.New("ride not found"))
 		return
 	}
-	ride.Evaluation = &req.Evaluation
-	ride.UpdatedAt = now
 
 	statusID := ulid.Make().String()
 	_, err = tx.ExecContext(
