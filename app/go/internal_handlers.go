@@ -114,7 +114,7 @@ func init() {
 				emptyChairsLocker.RLock()
 				defer emptyChairsLocker.RUnlock()
 
-				return len(emptyChairs) > 5 || skipCounter > 10
+				return len(emptyChairs) > 5 || skipCounter > 20
 			}()
 			if isChairExist {
 				skipCounter = 0
