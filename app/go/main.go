@@ -156,7 +156,6 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 	isuqueue.AllReset()
 	defer isutools.AfterInitialize()
 
-	ctx := r.Context()
 	req := &postInitializeRequest{}
 	if err := bindJSON(r, req); err != nil {
 		writeError(w, r, http.StatusBadRequest, err)
