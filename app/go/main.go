@@ -27,6 +27,7 @@ import (
 )
 
 var db *sqlx.DB
+var paymentGatewayURL string = "http://43.207.87.29:12345"
 
 func main() {
 	mux := setup()
@@ -167,10 +168,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := db.ExecContext(ctx, "UPDATE settings SET value = ? WHERE name = 'payment_gateway_url'", req.PaymentServer); err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
-		return
-	}
+	paymentGatewayURL = req.PaymentServer
 
 	if err := initBadger(); err != nil {
 		writeError(w, r, http.StatusInternalServerError, err)
