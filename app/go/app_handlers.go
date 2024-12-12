@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/goccy/go-json"
+	"github.com/motoki317/sc"
 
 	"github.com/jmoiron/sqlx"
 	isucache "github.com/mazrean/isucon-go-tools/v2/cache"
@@ -1011,6 +1012,22 @@ type appGetNearbyChairsResponseChair struct {
 	CurrentCoordinate Coordinate `json:"current_coordinate"`
 }
 
+var activeChairsCache *sc.Cache[string, []Chair]
+
+func init() {
+	var err error
+	activeChairsCache, err = isucache.New("activeChairsCache", func(ctx context.Context, key string) ([]Chair, error) {
+		chairs := []Chair{}
+		if err := db.SelectContext(ctx, &chairs, `SELECT * FROM chairs WHERE is_active = TRUE`); err != nil {
+			return nil, err
+		}
+		return chairs, nil
+	}, 1*time.Second, 2*time.Second)
+	if err != nil {
+		panic(err)
+	}
+}
+
 func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	latStr := r.URL.Query().Get("latitude")
@@ -1052,12 +1069,7 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	// Fetch all active chairs
-	chairs := []Chair{}
-	err = tx.SelectContext(
-		ctx,
-		&chairs,
-		`SELECT * FROM chairs WHERE is_active = TRUE`,
-	)
+	chairs, err := activeChairsCache.Get(ctx, "activeChairs")
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, err)
 		return
