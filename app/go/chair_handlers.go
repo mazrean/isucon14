@@ -271,16 +271,11 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	chair := ctx.Value("chair").(*Chair)
 
-	ride := &Ride{}
-
-	if err := db.GetContext(ctx, ride, `SELECT * FROM rides WHERE chair_id = ? ORDER BY updated_at DESC LIMIT 1`, chair.ID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			writeJSON(w, http.StatusOK, &chairGetNotificationResponse{
-				RetryAfterMs: 100,
-			})
-			return
-		}
-		writeError(w, r, http.StatusInternalServerError, err)
+	ride, ok := latestRideCache.Load(chair.ID)
+	if !ok {
+		writeJSON(w, http.StatusOK, &chairGetNotificationResponse{
+			RetryAfterMs: 100,
+		})
 		return
 	}
 
@@ -342,14 +337,11 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 			return
 		case event := <-ch:
 			if event.status == "MATCHED" {
-				if err := db.GetContext(ctx, ride, `SELECT * FROM rides WHERE id = ?`, event.rideID); err != nil {
-					if errors.Is(err, sql.ErrNoRows) {
-						writeJSON(w, http.StatusOK, &chairGetNotificationResponse{
-							RetryAfterMs: 100,
-						})
-						return
-					}
-					writeError(w, r, http.StatusInternalServerError, err)
+				ride, ok = latestRideCache.Load(chair.ID)
+				if !ok {
+					writeJSON(w, http.StatusOK, &chairGetNotificationResponse{
+						RetryAfterMs: 100,
+					})
 					return
 				}
 
@@ -401,12 +393,6 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "data: %s\n", sb.String())
 			flusher.Flush()
 
-			_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, status.ID)
-			if err != nil {
-				writeError(w, r, http.StatusInternalServerError, err)
-				return
-			}
-
 			if status.Status == "COMPLETED" {
 				go func() {
 					emptyChairsLocker.Lock()
@@ -414,6 +400,12 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 
 					emptyChairs = append(emptyChairs, chair)
 				}()
+			}
+
+			_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, status.ID)
+			if err != nil {
+				writeError(w, r, http.StatusInternalServerError, err)
+				return
 			}
 		}
 	}
