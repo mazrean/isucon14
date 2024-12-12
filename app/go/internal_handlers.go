@@ -263,6 +263,7 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		latestRideCache.Store(m.ch.ID, m.ride)
 		ChairPublish(m.ch.ID, &RideEvent{
 			status:  "MATCHED",
 			chairID: m.ch.ID,
@@ -273,7 +274,6 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 			chairID: m.ch.ID,
 			rideID:  m.ride.ID,
 		})
-		latestRideCache.Store(m.ch.ID, m.ride)
 		matchedChairIDMap[m.ch.ID] = struct{}{}
 		matchedRideIDMap[m.ride.ID] = struct{}{}
 	}
