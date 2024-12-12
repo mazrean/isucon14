@@ -611,6 +611,13 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tx, err := db.Beginx()
+	if err != nil {
+		writeError(w, r, http.StatusInternalServerError, err)
+		return
+	}
+	defer tx.Rollback()
+
 	var ride *Ride
 	exists := false
 	rideCache.Update(rideID, func(v *Ride) (*Ride, bool) {
@@ -634,17 +641,14 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if status == "COMPLETED" {
+		writeError(w, r, http.StatusBadRequest, fmt.Errorf("already completed"))
+		return
+	}
 	if status != "ARRIVED" {
 		writeError(w, r, http.StatusBadRequest, errors.New("not arrived yet"))
 		return
 	}
-
-	tx, err := db.Beginx()
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
-		return
-	}
-	defer tx.Rollback()
 
 	result, err := tx.ExecContext(
 		ctx,
