@@ -294,6 +294,16 @@ func internalGetMatching() {
 	)
 
 	func() {
+		matchingRidesLock.Lock()
+		defer matchingRidesLock.Unlock()
+
+		for _, r := range rides {
+			if _, ok := matchedRideIDMap[r.ID]; !ok {
+				matchingRides = append(matchingRides, r)
+			}
+		}
+	}()
+	func() {
 		emptyChairsLocker.Lock()
 		defer emptyChairsLocker.Unlock()
 		for _, ch := range chairs {
