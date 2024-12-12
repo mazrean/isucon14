@@ -1046,6 +1046,12 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 		chairIDs[i] = chair.ID
 	}
 
+	chairLocationMap, err := getChairLocationsFromBadger(chairIDs)
+	if err != nil {
+		writeError(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
 	nearbyChairs := []appGetNearbyChairsResponseChair{}
 	for _, chair := range chairs {
 		// Check rides for this chair
@@ -1062,11 +1068,7 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Get the latest ChairLocation
-		chairLocation, exists, err := getChairLocationFromBadger(chair.ID)
-		if err != nil {
-			writeError(w, r, http.StatusInternalServerError, err)
-			return
-		}
+		chairLocation, exists := chairLocationMap[chair.ID]
 		if !exists {
 			continue
 		}

@@ -124,6 +124,38 @@ func decodeChairLocation(data []byte) chairLocation {
 	return location
 }
 
+func getChairLocationsFromBadger(chairIDs []string) (map[string]*chairLocation, error) {
+	locations := make(map[string]*chairLocation, len(chairIDs))
+	err := badgerDB.View(func(txn *badger.Txn) error {
+		for _, chairID := range chairIDs {
+			bytesChairID := append([]byte("location"), []byte(chairID)...)
+			item, err := txn.Get(bytesChairID)
+			if errors.Is(err, badger.ErrKeyNotFound) {
+				continue
+			}
+			if err != nil {
+				return fmt.Errorf("failed to get item: %w", err)
+			}
+
+			err = item.Value(func(val []byte) error {
+				location := decodeChairLocation(val)
+				locations[chairID] = &location
+				return nil
+			})
+			if err != nil {
+				return fmt.Errorf("failed to get value: %w", err)
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to view badger: %w", err)
+	}
+
+	return locations, nil
+}
+
 func getChairLocationFromBadger(chairID string) (*chairLocation, bool, error) {
 	var (
 		location chairLocation
