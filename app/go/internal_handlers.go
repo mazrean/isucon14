@@ -223,7 +223,7 @@ func internalGetMatching() {
 			pd := float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, location.LastLatitude, location.LastLongitude)) / float64(chairModelSpeedCache[ch.Model])
 			dd := float64(manhattanDistance(ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude))
 			age := int(time.Since(ride.CreatedAt).Milliseconds())
-			loss := math.Pow(float64(age)/2000, 3)
+			loss := math.Pow(float64(age)/5000, 4)
 			// 25s以上経過しているrideは優先度を大きく上げる
 			if age > 22000 {
 				loss += 100000
