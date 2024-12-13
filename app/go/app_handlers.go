@@ -365,6 +365,18 @@ func appPostRides(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var l int
+	func() {
+		matchingRidesLock.RLock()
+		defer matchingRidesLock.RUnlock()
+
+		l = len(matchingRides)
+	}()
+	if l > 100 {
+		time.Sleep(5000 * time.Millisecond)
+	} else if l > 50 {
+		time.Sleep(1000 * time.Millisecond)
+	}
 	now := time.Now()
 
 	user := ctx.Value("user").(*User)
