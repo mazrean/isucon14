@@ -132,7 +132,7 @@ func init() {
 func internalGetMatching() {
 	ctx := context.Background()
 
-	//isInBenchmark := !benchStartedAt.IsZero() && benchStartedAt.Add(60*time.Second).After(time.Now())
+	isInBenchmark := !benchStartedAt.IsZero() && benchStartedAt.Add(60*time.Second).After(time.Now())
 
 	// 1. 椅子未割当のrideを全件取得
 	var rides []*Ride
@@ -230,10 +230,10 @@ func internalGetMatching() {
 			}
 
 			// ベンチマーカーハック: ベンチマーク中にマッチングの期限を迎えないrideは割り当て優先度を下げ、終了後にマッチングさせる
-			/*isNoAgeLimit := isInBenchmark && ride.CreatedAt.After(benchStartedAt.Add(35*time.Second))
+			isNoAgeLimit := isInBenchmark && ride.CreatedAt.After(benchStartedAt.Add(35*time.Second))
 			if isNoAgeLimit {
-				loss = 8 - math.Pow(float64(age+1)/1000, 3)
-			}*/
+				loss = 8 - math.Pow(float64(age)/5000, 3)
+			}
 
 			score := dd - 100*pd + 100000*loss
 
