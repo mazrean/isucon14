@@ -373,9 +373,9 @@ func appPostRides(w http.ResponseWriter, r *http.Request) {
 		l = len(matchingRides)
 	}()
 	if l > 100 {
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(5000 * time.Millisecond)
 	} else if l > 50 {
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(500 * time.Millisecond)
 	}
 	now := time.Now()
 
