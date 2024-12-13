@@ -132,7 +132,7 @@ func init() {
 func internalGetMatching() {
 	ctx := context.Background()
 
-	isInBenchmark := !benchStartedAt.IsZero() && benchStartedAt.Add(60*time.Second).After(time.Now())
+	//isInBenchmark := !benchStartedAt.IsZero() && benchStartedAt.Add(60*time.Second).After(time.Now())
 
 	// 1. 椅子未割当のrideを全件取得
 	var rides []*Ride
