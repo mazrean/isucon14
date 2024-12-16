@@ -107,8 +107,8 @@ github.com/mattn/go-runewidth v0.0.15 h1:UNAjwbU9l54TA3KzvqLGxwWjHmMgBUVhBiTjelZ
 github.com/mattn/go-runewidth v0.0.15/go.mod h1:Jdepj2loyihRzMpdS35Xk/zdY8IAYHsh153qUoGf23w=
 github.com/mattn/go-sqlite3 v1.14.24 h1:tpSp2G2KyMnnQu99ngJ47EIkWVmliIizyZBfPrBWDRM=
 github.com/mattn/go-sqlite3 v1.14.24/go.mod h1:Uh1q+B4BYcTPb+yiD3kU8Ct7aC0hY9fxUwlHK0RXw+Y=
-github.com/mazrean/isucon-go-tools/v2 v2.2.9 h1:yZCNN5+VGGGhIRDyB8eUOUQ9aeemZOp2/u2XCj3ndn8=
-github.com/mazrean/isucon-go-tools/v2 v2.2.9/go.mod h1:tc5n8jKyo16eztkWQmaBhtbNOjqXVopuzAUAcQ3wLu0=
+github.com/mazrean/isucon-go-tools/v2 v2.2.6 h1:E8Cyge/s91OIg3Wii6bY9RNUqO2u8oZyrY1QB/dpUfE=
+github.com/mazrean/isucon-go-tools/v2 v2.2.6/go.mod h1:tc5n8jKyo16eztkWQmaBhtbNOjqXVopuzAUAcQ3wLu0=
 github.com/mazrean/iwrapper v1.0.4 h1:H45/QIwcd3dgqKXSFbl4HwdmEyoG4enPPqWPnWZ22wU=
 github.com/mazrean/iwrapper v1.0.4/go.mod h1:vH6krha/JaY7ETzNA1pzlTI7YaGywml5SRdKN0UBcRY=
 github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=

@@ -2,7 +2,6 @@ package main
 
 import (
 	crand "crypto/rand"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net"
@@ -10,21 +9,58 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"time"
 
+	"github.com/bytedance/sonic"
+	"github.com/goccy/go-json"
+
+	"github.com/dgraph-io/badger"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
-	_ "github.com/mazrean/isucon-go-tools/v2"
+	isutools "github.com/mazrean/isucon-go-tools/v2"
 	isudb "github.com/mazrean/isucon-go-tools/v2/db"
 	isuhttp "github.com/mazrean/isucon-go-tools/v2/http"
+	isuqueue "github.com/mazrean/isucon-go-tools/v2/queue"
 )
 
 var db *sqlx.DB
+var paymentGatewayURL string = "http://43.207.87.29:12345"
 
 func main() {
 	mux := setup()
 	slog.Info("Listening on :8080")
+
+	err := os.MkdirAll(badgerDir, 0755)
+	if err != nil {
+		panic(fmt.Sprintf("failed to create badger directory: %v", err))
+	}
+	badgerDB, err = badger.Open(badger.DefaultOptions(badgerDir))
+	if err != nil {
+		panic(fmt.Sprintf("failed to open badger: %v", err))
+	}
+	defer badgerDB.Close()
+	defer func() {
+		badgerDB.Close()
+	}()
+
+	if err := initEmptyChairs(); err != nil {
+		panic(err)
+	}
+
+	if err := initRideStatusesCache(); err != nil {
+		panic(err)
+	}
+
+	if err := initPaymentTokenCache(); err != nil {
+		panic(err)
+	}
+
+	if err := initRideCache(); err != nil {
+		panic(err)
+	}
+
 	isuhttp.ListenAndServe(":8080", mux)
 }
 
@@ -69,7 +105,6 @@ func setup() http.Handler {
 	db = _db
 
 	mux := chi.NewRouter()
-	mux.Use(middleware.Logger)
 	mux.Use(middleware.Recoverer)
 	mux.HandleFunc("POST /api/initialize", postInitialize)
 
@@ -107,11 +142,6 @@ func setup() http.Handler {
 		authedMux.HandleFunc("POST /api/chair/rides/{ride_id}/status", chairPostRideStatus)
 	}
 
-	// internal handlers
-	{
-		mux.HandleFunc("GET /api/internal/matching", internalGetMatching)
-	}
-
 	return mux
 }
 
@@ -125,24 +155,50 @@ type postInitializeResponse struct {
 
 func postInitialize(w http.ResponseWriter, r *http.Request) {
 	isutools.BeforeInitialize()
+	isuqueue.AllReset()
 	defer isutools.AfterInitialize()
 
-	ctx := r.Context()
 	req := &postInitializeRequest{}
 	if err := bindJSON(r, req); err != nil {
-		writeError(w, http.StatusBadRequest, err)
+		writeError(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	if out, err := exec.Command("../sql/init.sh").CombinedOutput(); err != nil {
-		writeError(w, http.StatusInternalServerError, fmt.Errorf("failed to initialize: %s: %w", string(out), err))
+		writeError(w, r, http.StatusInternalServerError, fmt.Errorf("failed to initialize: %s: %w", string(out), err))
 		return
 	}
 
-	if _, err := db.ExecContext(ctx, "UPDATE settings SET value = ? WHERE name = 'payment_gateway_url'", req.PaymentServer); err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+	paymentGatewayURL = req.PaymentServer
+
+	if err := initBadger(); err != nil {
+		writeError(w, r, http.StatusInternalServerError, err)
 		return
 	}
+
+	initEventBus()
+
+	if err := initEmptyChairs(); err != nil {
+		writeError(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	if err := initRideStatusesCache(); err != nil {
+		writeError(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	if err := initPaymentTokenCache(); err != nil {
+		writeError(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	if err := initRideCache(); err != nil {
+		writeError(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	benchStartedAt = time.Now()
 
 	writeJSON(w, http.StatusOK, postInitializeResponse{Language: "go"})
 }
@@ -153,7 +209,7 @@ type Coordinate struct {
 }
 
 func bindJSON(r *http.Request, v interface{}) error {
-	return json.NewDecoder(r.Body).Decode(v)
+	return sonic.ConfigFastest.NewDecoder(r.Body).Decode(v)
 }
 
 func writeJSON(w http.ResponseWriter, statusCode int, v interface{}) {
@@ -167,7 +223,7 @@ func writeJSON(w http.ResponseWriter, statusCode int, v interface{}) {
 	w.Write(buf)
 }
 
-func writeError(w http.ResponseWriter, statusCode int, err error) {
+func writeError(w http.ResponseWriter, r *http.Request, statusCode int, err error) {
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	w.WriteHeader(statusCode)
 	buf, marshalError := json.Marshal(map[string]string{"message": err.Error()})
@@ -178,7 +234,11 @@ func writeError(w http.ResponseWriter, statusCode int, err error) {
 	}
 	w.Write(buf)
 
-	slog.Error("error response wrote", err)
+	slog.Error("error response wrote",
+		slog.String("path", r.URL.Path),
+		slog.Int("status_code", statusCode),
+		slog.String("error", err.Error()),
+	)
 }
 
 func secureRandomStr(b int) string {

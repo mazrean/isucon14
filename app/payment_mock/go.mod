@@ -2,7 +2,7 @@ module payment_mock
 
 go 1.23
 
-require github.com/mazrean/isucon-go-tools/v2 v2.2.9
+require github.com/mazrean/isucon-go-tools/v2 v2.2.6
 
 require (
 	connectrpc.com/connect v1.17.0 // indirect
