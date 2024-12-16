@@ -862,12 +862,6 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "data: %s\n", sb.String())
 	flusher.Flush()
 
-	_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET app_sent_at = CURRENT_TIMESTAMP(6) WHERE ride_id = ? AND app_sent_at IS NULL ORDER BY created_at ASC LIMIT 1`, response.RideID)
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
-		return
-	}
-
 	ch := make(chan *RideEvent, 100)
 	UserSubscribe(user.ID, ch)
 	for {
@@ -939,12 +933,6 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 			}
 			fmt.Fprintf(w, "data: %s\n", sb.String())
 			flusher.Flush()
-
-			_, err = db.ExecContext(ctx, `UPDATE ride_statuses SET app_sent_at = CURRENT_TIMESTAMP(6) WHERE ride_id = ? AND app_sent_at IS NULL ORDER BY created_at ASC LIMIT 1`, response.RideID)
-			if err != nil {
-				writeError(w, r, http.StatusInternalServerError, err)
-				return
-			}
 
 			if response.Status == "COMPLETED" {
 				return
