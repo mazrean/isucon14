@@ -106,7 +106,7 @@ func ownerGetSales(w http.ResponseWriter, r *http.Request) {
 		Chair
 		Sales int `db:"sales"`
 	}{}
-	if err := db.SelectContext(ctx, &chairs, "SELECT chairs.id, chairs.name, chairs.model, SUM(IF(rides.id IS NULL, 0, ? + (? * (ABS(rides.pickup_latitude - rides.destination_latitude) + ABS(rides.pickup_longitude - rides.destination_longitude))))) AS sales FROM chairs LEFT JOIN rides ON rides.chair_id = chairs.id AND rides.updated_at BETWEEN ? AND ? + INTERVAL 999 MICROSECOND LEFT JOIN ride_statuses ON rides.id <=> ride_statuses.ride_id AND ride_statuses.status = 'COMPLETED' WHERE chairs.owner_id = ? GROUP BY chairs.id", initialFare, farePerDistance, since, until, owner.ID); err != nil {
+	if err := db.SelectContext(ctx, &chairs, "SELECT chairs.id, chairs.name, chairs.model, SUM(IF(rides.id IS NULL OR ride_statuses.status != 'COMPLETED', 0, ? + (? * (ABS(rides.pickup_latitude - rides.destination_latitude) + ABS(rides.pickup_longitude - rides.destination_longitude))))) AS sales FROM chairs LEFT JOIN rides ON rides.chair_id = chairs.id AND rides.updated_at BETWEEN ? AND ? + INTERVAL 999 MICROSECOND LEFT JOIN ride_statuses ON rides.id <=> ride_statuses.ride_id WHERE chairs.owner_id = ? GROUP BY chairs.id", initialFare, farePerDistance, since, until, owner.ID); err != nil {
 		writeError(w, r, http.StatusInternalServerError, err)
 		return
 	}
