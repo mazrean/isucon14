@@ -28,11 +28,11 @@ func ownerPostOwners(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	req := &ownerPostOwnersRequest{}
 	if err := bindJSON(r, req); err != nil {
-		writeError(w, r, http.StatusBadRequest, err)
+		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 	if req.Name == "" {
-		writeError(w, r, http.StatusBadRequest, errors.New("some of required fields(name) are empty"))
+		writeError(w, http.StatusBadRequest, errors.New("some of required fields(name) are empty"))
 		return
 	}
 
@@ -46,7 +46,7 @@ func ownerPostOwners(w http.ResponseWriter, r *http.Request) {
 		ownerID, req.Name, accessToken, chairRegisterToken,
 	)
 	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
+		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -86,7 +86,7 @@ func ownerGetSales(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("since") != "" {
 		parsed, err := strconv.ParseInt(r.URL.Query().Get("since"), 10, 64)
 		if err != nil {
-			writeError(w, r, http.StatusBadRequest, err)
+			writeError(w, http.StatusBadRequest, err)
 			return
 		}
 		since = time.UnixMilli(parsed)
@@ -94,7 +94,7 @@ func ownerGetSales(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("until") != "" {
 		parsed, err := strconv.ParseInt(r.URL.Query().Get("until"), 10, 64)
 		if err != nil {
-			writeError(w, r, http.StatusBadRequest, err)
+			writeError(w, http.StatusBadRequest, err)
 			return
 		}
 		until = time.UnixMilli(parsed)
@@ -104,14 +104,14 @@ func ownerGetSales(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := db.Beginx()
 	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
+		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 	defer tx.Rollback()
 
 	chairs := []Chair{}
 	if err := tx.SelectContext(ctx, &chairs, "SELECT * FROM chairs WHERE owner_id = ?", owner.ID); err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
+		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -123,7 +123,7 @@ func ownerGetSales(w http.ResponseWriter, r *http.Request) {
 	for _, chair := range chairs {
 		rides := []Ride{}
 		if err := tx.SelectContext(ctx, &rides, "SELECT rides.* FROM rides JOIN ride_statuses ON rides.id = ride_statuses.ride_id WHERE chair_id = ? AND status = 'COMPLETED' AND updated_at BETWEEN ? AND ? + INTERVAL 999 MICROSECOND", chair.ID, since, until); err != nil {
-			writeError(w, r, http.StatusInternalServerError, err)
+			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
 
@@ -164,16 +164,16 @@ func calculateSale(ride Ride) int {
 }
 
 type chairWithDetail struct {
-	ID                     string        `db:"id"`
-	OwnerID                string        `db:"owner_id"`
-	Name                   string        `db:"name"`
-	AccessToken            string        `db:"access_token"`
-	Model                  string        `db:"model"`
-	IsActive               bool          `db:"is_active"`
-	CreatedAt              time.Time     `db:"created_at"`
-	UpdatedAt              time.Time     `db:"updated_at"`
-	TotalDistance          int           `db:"total_distance"`
-	TotalDistanceUpdatedAt sql.NullInt64 `db:"total_distance_updated_at"`
+	ID                     string       `db:"id"`
+	OwnerID                string       `db:"owner_id"`
+	Name                   string       `db:"name"`
+	AccessToken            string       `db:"access_token"`
+	Model                  string       `db:"model"`
+	IsActive               bool         `db:"is_active"`
+	CreatedAt              time.Time    `db:"created_at"`
+	UpdatedAt              time.Time    `db:"updated_at"`
+	TotalDistance          int          `db:"total_distance"`
+	TotalDistanceUpdatedAt sql.NullTime `db:"total_distance_updated_at"`
 }
 
 type ownerGetChairResponse struct {
@@ -202,30 +202,23 @@ func ownerGetChairs(w http.ResponseWriter, r *http.Request) {
        model,
        is_active,
        created_at,
-       updated_at
-FROM chairs WHERE owner_id = ?
+       updated_at,
+       IFNULL(total_distance, 0) AS total_distance,
+       total_distance_updated_at
+FROM chairs
+       LEFT JOIN (SELECT chair_id,
+                          SUM(IFNULL(distance, 0)) AS total_distance,
+                          MAX(created_at)          AS total_distance_updated_at
+                   FROM (SELECT chair_id,
+                                created_at,
+                                ABS(latitude - LAG(latitude) OVER (PARTITION BY chair_id ORDER BY created_at)) +
+                                ABS(longitude - LAG(longitude) OVER (PARTITION BY chair_id ORDER BY created_at)) AS distance
+                         FROM chair_locations) tmp
+                   GROUP BY chair_id) distance_table ON distance_table.chair_id = chairs.id
+WHERE owner_id = ?
 `, owner.ID); err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
+		writeError(w, http.StatusInternalServerError, err)
 		return
-	}
-
-	for i := range chairs {
-		chair := &chairs[i]
-
-		location, ok, err := getChairLocationFromBadger(chair.ID)
-		if err != nil {
-			writeError(w, r, http.StatusInternalServerError, err)
-			return
-		}
-		if !ok {
-			continue
-		}
-
-		chair.TotalDistance = location.TotalDistance
-		chair.TotalDistanceUpdatedAt = sql.NullInt64{
-			Int64: location.TotalDistanceUpdatedAt,
-			Valid: true,
-		}
 	}
 
 	res := ownerGetChairResponse{}
@@ -239,7 +232,7 @@ FROM chairs WHERE owner_id = ?
 			TotalDistance: chair.TotalDistance,
 		}
 		if chair.TotalDistanceUpdatedAt.Valid {
-			t := chair.TotalDistanceUpdatedAt.Int64
+			t := chair.TotalDistanceUpdatedAt.Time.UnixMilli()
 			c.TotalDistanceUpdatedAt = &t
 		}
 		res.Chairs = append(res.Chairs, c)
