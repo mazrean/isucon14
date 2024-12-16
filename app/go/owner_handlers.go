@@ -102,16 +102,12 @@ func ownerGetSales(w http.ResponseWriter, r *http.Request) {
 
 	owner := r.Context().Value("owner").(*Owner)
 
-	tx, err := db.Beginx()
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	defer tx.Rollback()
-
-	chairs := []Chair{}
-	if err := tx.SelectContext(ctx, &chairs, "SELECT * FROM chairs WHERE owner_id = ?", owner.ID); err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+	chairs := []struct {
+		Chair
+		Sales int `db:"sales"`
+	}{}
+	if err := db.SelectContext(ctx, &chairs, "SELECT chairs.id, chairs.name, chairs.model, SUM(? + ? * (ABS(rides.pickup_latitude - rides.destination_latitude) + ABS(rides.pickup_longitude - rides.destination_longitude))) AS sales FROM rides JOIN ride_statuses ON rides.id = ride_statuses.ride_id JOIN chairs ON rides.chair_id = chairs.id WHERE chairs.owner_id = ? AND ride_statuses.status = 'COMPLETED' AND rides.updated_at BETWEEN ? AND ? + INTERVAL 999 MICROSECOND GROUP BY chairs.id", initialFare, farePerDistance, owner.ID, since, until); err != nil {
+		writeError(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -121,22 +117,15 @@ func ownerGetSales(w http.ResponseWriter, r *http.Request) {
 
 	modelSalesByModel := map[string]int{}
 	for _, chair := range chairs {
-		rides := []Ride{}
-		if err := tx.SelectContext(ctx, &rides, "SELECT rides.* FROM rides JOIN ride_statuses ON rides.id = ride_statuses.ride_id WHERE chair_id = ? AND status = 'COMPLETED' AND updated_at BETWEEN ? AND ? + INTERVAL 999 MICROSECOND", chair.ID, since, until); err != nil {
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		sales := sumSales(rides)
-		res.TotalSales += sales
+		res.TotalSales += chair.Sales
 
 		res.Chairs = append(res.Chairs, chairSales{
 			ID:    chair.ID,
 			Name:  chair.Name,
-			Sales: sales,
+			Sales: chair.Sales,
 		})
 
-		modelSalesByModel[chair.Model] += sales
+		modelSalesByModel[chair.Model] += chair.Sales
 	}
 
 	models := []modelSales{}
@@ -149,18 +138,6 @@ func ownerGetSales(w http.ResponseWriter, r *http.Request) {
 	res.Models = models
 
 	writeJSON(w, http.StatusOK, res)
-}
-
-func sumSales(rides []Ride) int {
-	sale := 0
-	for _, ride := range rides {
-		sale += calculateSale(ride)
-	}
-	return sale
-}
-
-func calculateSale(ride Ride) int {
-	return calculateFare(ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude)
 }
 
 type chairWithDetail struct {
