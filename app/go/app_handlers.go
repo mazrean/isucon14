@@ -730,6 +730,11 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := updateUserStatusToBadger(ride.UserID, false); err != nil {
+		writeError(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
 	paymentToken, exists := paymentTokenCache.Load(ride.UserID)
 	if !exists {
 		writeError(w, r, http.StatusBadRequest, errors.New("payment token not registered"))
