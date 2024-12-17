@@ -46,7 +46,7 @@ func ChairPublish(event string, message *RideEvent) {
 	chairEventBusLock.RLock()
 	defer chairEventBusLock.RUnlock()
 
-	chairStatusGauge.WithLabelValues(message.status).Inc()
+	/*chairStatusGauge.WithLabelValues(message.status).Inc()
 	switch message.status {
 	case "MATCHED":
 		chairStatusGauge.WithLabelValues("COMPLETED").Dec()
@@ -60,7 +60,7 @@ func ChairPublish(event string, message *RideEvent) {
 		chairStatusGauge.WithLabelValues("CARRYING").Dec()
 	case "COMPLETED":
 		chairStatusGauge.WithLabelValues("ARRIVED").Dec()
-	}
+	}*/
 
 	for _, ch := range chairEventBus[event] {
 		ch <- message
@@ -83,7 +83,7 @@ func UserPublish(event string, message *RideEvent) {
 	userEventBusLock.RLock()
 	defer userEventBusLock.RUnlock()
 
-	userStatusGauge.WithLabelValues(message.status).Inc()
+	/*userStatusGauge.WithLabelValues(message.status).Inc()
 	switch message.status {
 	case "MATCHING":
 		userStatusGauge.WithLabelValues("COMPLETED").Dec()
@@ -99,7 +99,7 @@ func UserPublish(event string, message *RideEvent) {
 		userStatusGauge.WithLabelValues("CARRYING").Dec()
 	case "COMPLETED":
 		userStatusGauge.WithLabelValues("ARRIVED").Dec()
-	}
+	}*/
 
 	for _, ch := range userEventBus[event] {
 		ch <- message

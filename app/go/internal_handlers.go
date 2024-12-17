@@ -4,12 +4,14 @@ import (
 	"cmp"
 	"context"
 	"database/sql"
-	"errors"
+	"fmt"
 	"math"
 	"slices"
 	"sync"
 	"time"
 
+	"github.com/dgraph-io/badger"
+	"github.com/oklog/ulid/v2"
 	"golang.org/x/exp/slog"
 )
 
@@ -83,25 +85,45 @@ func initEmptyChairs() error {
 	emptyChairsLocker.Lock()
 	defer emptyChairsLocker.Unlock()
 
-	query := `
-SELECT c.*
-FROM chairs c
-LEFT JOIN rides r ON r.chair_id = c.id
-LEFT JOIN (
-    SELECT ride_id, (COUNT(chair_sent_at) = 6) AS completed
-    FROM ride_statuses
-    GROUP BY ride_id
-) rs ON rs.ride_id = r.id
-WHERE c.is_active = TRUE
-GROUP BY c.id
-HAVING SUM(CASE WHEN rs.completed = 0 AND rs.completed IS NOT NULL THEN 1 ELSE 0 END) = 0
-`
-	if err := db.Select(&emptyChairs, query); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil
+	emptyChairIDs := []string{}
+	err := badgerDB.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.PrefetchValues = false
+		opts.Prefix = []byte("status")
+		it := txn.NewIterator(opts)
+		defer it.Close()
+
+		for it.Rewind(); it.Valid(); it.Next() {
+			item := it.Item()
+			k := item.Key()
+			chairID := ulid.ULID(k[6:]).String()
+
+			err := item.Value(func(v []byte) error {
+				status := decodeChairStatus(v)
+				if status.status == chairStatusAvailable {
+					emptyChairIDs = append(emptyChairIDs, chairID)
+				}
+				return nil
+			})
+			if err != nil {
+				return err
+			}
 		}
 
-		return err
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	if len(emptyChairIDs) == 0 {
+		emptyChairs = []*Chair{}
+		return nil
+	}
+
+	emptyChairs = make([]*Chair, len(emptyChairIDs))
+	if err := db.SelectContext(context.Background(), &emptyChairs, "SELECT * FROM chairs WHERE id IN (?)", emptyChairIDs); err != nil {
+		return fmt.Errorf("failed to get empty chairs: %w", err)
 	}
 
 	return nil

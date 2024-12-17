@@ -90,6 +90,7 @@ CREATE TABLE rides
   destination_latitude  INTEGER     NOT NULL COMMENT '目的地(経度)',
   destination_longitude INTEGER     NOT NULL COMMENT '目的地(緯度)',
   evaluation            INTEGER     NULL     COMMENT '評価',
+  sales                 INTEGER     NOT NULL DEFAULT 0 INVISIBLE COMMENT '売上',
   created_at            DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '要求日時',
   updated_at            DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '状態更新日時',
   PRIMARY KEY (id)

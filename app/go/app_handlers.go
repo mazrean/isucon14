@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dgraph-io/badger"
 	"github.com/goccy/go-json"
 	"github.com/motoki317/sc"
 
@@ -301,13 +302,71 @@ type executableGet interface {
 var rideStatusesCache = isucache.NewAtomicMap[string, *RideStatus]("rideStatusesCache")
 
 func initRideStatusesCache() error {
-	var rideStatuses []RideStatus
-	if err := db.Select(&rideStatuses, "SELECT * FROM ride_statuses as ride_status WHERE ride_status.created_at = (SELECT MAX(rs.created_at) FROM ride_statuses as rs WHERE ride_status.ride_id = rs.ride_id)"); err != nil {
+	var rides []Ride
+	if err := db.Select(&rides, "SELECT * FROM rides"); err != nil {
 		return err
 	}
 
-	for _, rideStatus := range rideStatuses {
-		rideStatusesCache.Store(rideStatus.RideID, &rideStatus)
+	for _, ride := range rides {
+		if ride.ChairID.Valid {
+			rideStatusesCache.Store(ride.ID, &RideStatus{
+				RideID: ride.ID,
+				Status: "COMPLETED",
+			})
+		} else {
+			rideStatusesCache.Store(ride.ID, &RideStatus{
+				RideID: ride.ID,
+				Status: "MATCHING",
+			})
+		}
+	}
+
+	err := badgerDB.View(func(tx *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.PrefetchValues = false
+		opts.Prefix = []byte("status")
+		it := tx.NewIterator(opts)
+		defer it.Close()
+
+		for it.Rewind(); it.Valid(); it.Next() {
+			item := it.Item()
+			k := item.Key()
+			rideID := ulid.ULID(k[6:]).String()
+
+			err := item.Value(func(v []byte) error {
+				status := decodeChairStatus(v)
+				strStatus := "MATCHING"
+				switch status.status {
+				case chairStatusMatched:
+					strStatus = "MATCHING"
+				case chairStatusEnRoute:
+					strStatus = "ENROUTE"
+				case chairStatusPickup:
+					strStatus = "PICKUP"
+				case chairStatusCarrying:
+					strStatus = "CARRYING"
+				case chairStatusArrived:
+					strStatus = "ARRIVED"
+				case chairStatusCompleted:
+					strStatus = "COMPLETED"
+				}
+
+				rideStatusesCache.Store(rideID, &RideStatus{
+					RideID: rideID,
+					Status: strStatus,
+				})
+
+				return nil
+			})
+			if err != nil {
+				return fmt.Errorf("failed to get status: %w", err)
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -329,27 +388,6 @@ func getLatestRideStatusWithID(ctx context.Context, tx executableGet, rideID str
 	}
 
 	return rideStatus, nil
-}
-
-// New function to count ongoing rides with latest status not "COMPLETED"
-func countOngoingRides(ctx context.Context, tx executableGet, userID string) (int, error) {
-	query := `
-		SELECT COUNT(*)
-		FROM rides r
-		JOIN ride_statuses rs ON r.id = rs.ride_id
-		WHERE r.user_id = ?
-		  AND rs.created_at = (
-				SELECT MAX(rs2.created_at)
-				FROM ride_statuses rs2
-				WHERE rs2.ride_id = r.id
-			)
-		  AND rs.status != 'COMPLETED'
-	`
-	var count int
-	if err := tx.GetContext(ctx, &count, query, userID); err != nil {
-		return 0, err
-	}
-	return count, nil
 }
 
 // Modified appPostRides function with reduced SQL executions
@@ -390,13 +428,13 @@ func appPostRides(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	// Replace fetching all rides and iterating with a single count query
-	ongoingRideCount, err := countOngoingRides(ctx, tx, user.ID)
+	userStatus, err := getUserStatusFromBadger(user.ID)
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	if ongoingRideCount > 0 {
+	if userStatus {
 		writeError(w, r, http.StatusConflict, errors.New("ride already exists"))
 		return
 	}
@@ -411,12 +449,7 @@ func appPostRides(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	statusID := ulid.Make().String()
-	if _, err := tx.ExecContext(
-		ctx,
-		`INSERT INTO ride_statuses (id, ride_id, status) VALUES (?, ?, ?)`,
-		statusID, rideID, "MATCHING",
-	); err != nil {
+	if err := updateUserStatusToBadger(user.ID, true); err != nil {
 		writeError(w, r, http.StatusInternalServerError, err)
 		return
 	}
@@ -506,7 +539,6 @@ func appPostRides(w http.ResponseWriter, r *http.Request) {
 	}()
 	rideCache.Store(rideID, &ride)
 	rideStatusesCache.Store(rideID, &RideStatus{
-		ID:     statusID,
 		RideID: rideID,
 		Status: "MATCHING",
 	})
@@ -676,8 +708,8 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 
 	result, err := tx.ExecContext(
 		ctx,
-		`UPDATE rides SET evaluation = ?, updated_at = ? WHERE id = ?`,
-		req.Evaluation, now, rideID)
+		`UPDATE rides SET evaluation = ?, sales = ?, updated_at = ? WHERE id = ?`,
+		req.Evaluation, initialFare+farePerDistance*calculateDistance(ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude), now, rideID)
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, err)
 		return
@@ -690,12 +722,10 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	statusID := ulid.Make().String()
-	_, err = tx.ExecContext(
-		ctx,
-		`INSERT INTO ride_statuses (id, ride_id, status) VALUES (?, ?, ?)`,
-		statusID, rideID, "COMPLETED")
-	if err != nil {
+	if err := updateChairStatusToBadger(ride.ChairID.String, &chairStatus{
+		status: chairStatusCompleted,
+		rideID: rideID,
+	}); err != nil {
 		writeError(w, r, http.StatusInternalServerError, err)
 		return
 	}
@@ -730,7 +760,6 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rideStatusesCache.Store(rideID, &RideStatus{
-		ID:     statusID,
 		RideID: rideID,
 		Status: "COMPLETED",
 	})
