@@ -198,9 +198,22 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := initRideSales(); err != nil {
+		writeError(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
 	benchStartedAt = time.Now()
 
 	writeJSON(w, http.StatusOK, postInitializeResponse{Language: "go"})
+}
+
+func initRideSales() error {
+	if _, err := db.Exec(`UPDATE rides SET sales = ? + ? * (ABS(pickup_latitude - destination_latitude) + ABS(pickup_longitude - destination_longitude)) WHERE (SELECT COUNT(*) FROM ride_statuses as rs WHERE rs.ride_id = rides.id AND rs.status = "COMPLETED") != 0`, initialFare, farePerDistance); err != nil {
+		return fmt.Errorf("failed to update rides sales: %w", err)
+	}
+
+	return nil
 }
 
 type Coordinate struct {
