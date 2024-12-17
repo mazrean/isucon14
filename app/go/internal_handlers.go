@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
+	"github.com/jmoiron/sqlx"
 	"github.com/oklog/ulid/v2"
 	"golang.org/x/exp/slog"
 )
@@ -122,7 +123,12 @@ func initEmptyChairs() error {
 	}
 
 	emptyChairs = make([]*Chair, len(emptyChairIDs))
-	if err := db.SelectContext(context.Background(), &emptyChairs, "SELECT * FROM chairs WHERE id IN (?)", emptyChairIDs); err != nil {
+	query, args, err := sqlx.In("SELECT * FROM chairs WHERE id IN (?)", emptyChairIDs)
+	if err != nil {
+		return fmt.Errorf("failed to build query: %w", err)
+	}
+
+	if err := db.SelectContext(context.Background(), &emptyChairs, query, args...); err != nil {
 		return fmt.Errorf("failed to get empty chairs: %w", err)
 	}
 
