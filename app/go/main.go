@@ -156,12 +156,12 @@ func setup() http.Handler {
 	publicHandler := http.FileServerFS(sub)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/api/") {
+		if strings.HasPrefix(r.URL.Path, "/api") {
 			mux.ServeHTTP(w, r)
 		} else if r.URL.Path == "/index.html" {
 			w.Header().Set("Content-Type", "text/html")
 			w.WriteHeader(http.StatusOK)
-			http.ServeFileFS(w, r, files, "public/index.html")
+			http.ServeFileFS(w, r, sub, "index.html")
 		} else {
 			rw := &responseWriterInterceptor{ResponseWriter: w, statusCode: http.StatusOK}
 			publicHandler.ServeHTTP(rw, r)
