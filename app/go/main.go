@@ -5,6 +5,7 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"log"
 	"log/slog"
 	"net"
 	"net/http"
@@ -66,7 +67,7 @@ func main() {
 		panic(err)
 	}
 
-	isuhttp.ListenAndServeTLS(":443", "/etc/nginx/tls/_.xiv.isucon.net.crt", "/etc/nginx/tls/_.xiv.isucon.net.key", mux)
+	log.Fatalln(isuhttp.ListenAndServeTLS(":443", "/etc/nginx/tls/_.xiv.isucon.net.crt", "/etc/nginx/tls/_.xiv.isucon.net.key", mux))
 }
 
 func setup() http.Handler {
