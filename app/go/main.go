@@ -2,7 +2,6 @@ package main
 
 import (
 	crand "crypto/rand"
-	"crypto/tls"
 	"embed"
 	"fmt"
 	"io/fs"
@@ -68,35 +67,7 @@ func main() {
 		panic(err)
 	}
 
-	setTCPKeepAlive := func(clientHello *tls.ClientHelloInfo) (*tls.Config, error) {
-		// Check that the underlying connection really is TCP.
-		if tcpConn, ok := clientHello.Conn.(*net.TCPConn); ok {
-			if err := tcpConn.SetKeepAlivePeriod(1024 * time.Second); err != nil {
-				fmt.Println("Could not set keep alive period", err)
-			} else {
-				fmt.Println("update keep alive period")
-			}
-		} else {
-			fmt.Println("TLS over non-TCP connection")
-		}
-
-		// Make sure to return nil, nil to let the caller fall back on the default behavior.
-		return nil, nil
-	}
-
-	tlsConfig := &tls.Config{
-		GetConfigForClient:       setTCPKeepAlive,
-		PreferServerCipherSuites: true,
-		MinVersion:               tls.VersionTLS12,
-	}
-
-	server := &http.Server{
-		Addr:      ":443",
-		TLSConfig: tlsConfig,
-		Handler:   mux,
-	}
-
-	log.Fatalln(isuhttp.ServerListenAndServeTLS(server, "/etc/nginx/tls/_.xiv.isucon.net.crt", "/etc/nginx/tls/_.xiv.isucon.net.key"))
+	log.Fatalln(isuhttp.ListenAndServeTLS(":443", "/etc/nginx/tls/_.xiv.isucon.net.crt", "/etc/nginx/tls/_.xiv.isucon.net.key", mux))
 }
 
 func setup() http.Handler {
