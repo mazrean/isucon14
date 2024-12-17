@@ -14,7 +14,6 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/bytedance/sonic"
@@ -35,13 +34,6 @@ var files embed.FS
 
 var db *sqlx.DB
 var paymentGatewayURL string = "http://43.207.87.29:12345"
-
-func init() {
-	var rLimit syscall.Rlimit
-	rLimit.Max = 16384
-	rLimit.Cur = 16384
-	syscall.Setrlimit(syscall.RLIMIT_NOFILE, &rLimit)
-}
 
 func main() {
 	mux := setup()
@@ -93,31 +85,15 @@ func main() {
 	}
 
 	tlsConfig := &tls.Config{
-		SessionTicketsDisabled:   false,
-		ClientSessionCache:       tls.NewLRUClientSessionCache(10000),
 		GetConfigForClient:       setTCPKeepAlive,
 		PreferServerCipherSuites: true,
-		CipherSuites: []uint16{
-			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
-			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-		},
-		CurvePreferences: []tls.CurveID{
-			tls.X25519,
-			tls.CurveP256,
-		},
-		MinVersion: tls.VersionTLS12,
-		NextProtos: []string{"h2", "http/1.1"},
+		MinVersion:               tls.VersionTLS12,
 	}
 
 	server := &http.Server{
-		Addr:         ":443",
-		TLSConfig:    tlsConfig,
-		Handler:      mux,
-		IdleTimeout:  65 * time.Second, // keepalive_timeout相当
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		Addr:      ":443",
+		TLSConfig: tlsConfig,
+		Handler:   mux,
 	}
 
 	log.Fatalln(isuhttp.ServerListenAndServeTLS(server, "/etc/nginx/tls/_.xiv.isucon.net.crt", "/etc/nginx/tls/_.xiv.isucon.net.key"))
