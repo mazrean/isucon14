@@ -446,15 +446,8 @@ func chairPostRideStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tx, err := db.Beginx()
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
-		return
-	}
-	defer tx.Rollback()
-
 	ride := &Ride{}
-	if err := tx.GetContext(ctx, ride, "SELECT * FROM rides WHERE id = ? FOR UPDATE", rideID); err != nil {
+	if err := db.GetContext(ctx, ride, "SELECT * FROM rides WHERE id = ? FOR UPDATE", rideID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, r, http.StatusNotFound, errors.New("ride not found"))
 			return
@@ -482,7 +475,7 @@ func chairPostRideStatus(w http.ResponseWriter, r *http.Request) {
 
 	// After Picking up user
 	case "CARRYING":
-		status, err := getLatestRideStatus(ctx, tx, ride.ID)
+		status, err := getLatestRideStatus(ctx, db, ride.ID)
 		if err != nil {
 			writeError(w, r, http.StatusInternalServerError, err)
 			return
@@ -500,11 +493,6 @@ func chairPostRideStatus(w http.ResponseWriter, r *http.Request) {
 		}
 	default:
 		writeError(w, r, http.StatusBadRequest, errors.New("invalid status"))
-	}
-
-	if err := tx.Commit(); err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
-		return
 	}
 
 	rideStatusesCache.Store(ride.ID, &RideStatus{
