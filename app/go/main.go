@@ -2,16 +2,13 @@ package main
 
 import (
 	crand "crypto/rand"
-	"embed"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/bytedance/sonic"
@@ -26,9 +23,6 @@ import (
 	isuhttp "github.com/mazrean/isucon-go-tools/v2/http"
 	isuqueue "github.com/mazrean/isucon-go-tools/v2/queue"
 )
-
-//go:embed public/*
-var files embed.FS
 
 var db *sqlx.DB
 var paymentGatewayURL string = "http://43.207.87.29:12345"
@@ -66,7 +60,7 @@ func main() {
 		panic(err)
 	}
 
-	isuhttp.ListenAndServeTLS(":443", "/etc/nginx/tls/_.xiv.isucon.net.crt", "/etc/nginx/tls/_.xiv.isucon.net.key", mux)
+	isuhttp.ListenAndServe(":8080", mux)
 }
 
 func setup() http.Handler {
@@ -147,34 +141,7 @@ func setup() http.Handler {
 		authedMux.HandleFunc("POST /api/chair/rides/{ride_id}/status", chairPostRideStatus)
 	}
 
-	// public files
-	sub, err := fs.Sub(files, "public")
-	if err != nil {
-		panic(err)
-	}
-	publicHandler := http.FileServerFS(sub)
-
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/api") {
-			mux.ServeHTTP(w, r)
-		} else {
-			rw := &responseWriterInterceptor{ResponseWriter: w, statusCode: http.StatusOK}
-			publicHandler.ServeHTTP(rw, r)
-			if rw.statusCode == http.StatusNotFound {
-				http.ServeFileFS(w, r, sub, "index.html")
-			}
-		}
-	})
-}
-
-type responseWriterInterceptor struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-func (rw *responseWriterInterceptor) WriteHeader(code int) {
-	rw.statusCode = code
-	rw.ResponseWriter.WriteHeader(code)
+	return mux
 }
 
 type postInitializeRequest struct {
