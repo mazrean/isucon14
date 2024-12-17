@@ -162,6 +162,8 @@ func setup() http.Handler {
 			rw := &responseWriterInterceptor{ResponseWriter: w, statusCode: http.StatusOK}
 			publicHandler.ServeHTTP(rw, r)
 			if rw.statusCode == http.StatusNotFound {
+				w.Header().Set("Content-Type", "text/html")
+				w.WriteHeader(http.StatusOK)
 				http.ServeFileFS(w, r, sub, "index.html")
 			}
 		}
