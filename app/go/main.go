@@ -154,10 +154,18 @@ func setup() http.Handler {
 		panic(err)
 	}
 	publicHandler := http.FileServerFS(sub)
+	indexHTMLBody, err := fs.ReadFile(sub, "index.html")
+	if err != nil {
+		panic(err)
+	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			mux.ServeHTTP(w, r)
+		} else if r.URL.Path == "/index.html" {
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusOK)
+			w.Write(indexHTMLBody)
 		} else {
 			rw := &responseWriterInterceptor{ResponseWriter: w, statusCode: http.StatusOK}
 			publicHandler.ServeHTTP(rw, r)
@@ -177,13 +185,13 @@ type responseWriterInterceptor struct {
 
 func (rw *responseWriterInterceptor) WriteHeader(code int) {
 	rw.statusCode = code
-	if code != http.StatusNotFound && code != http.StatusMovedPermanently {
+	if code != http.StatusNotFound {
 		rw.ResponseWriter.WriteHeader(code)
 	}
 }
 
 func (rw *responseWriterInterceptor) Write(b []byte) (int, error) {
-	if rw.statusCode != http.StatusNotFound && rw.statusCode != http.StatusMovedPermanently {
+	if rw.statusCode != http.StatusNotFound {
 		return rw.ResponseWriter.Write(b)
 	}
 	return 0, nil
