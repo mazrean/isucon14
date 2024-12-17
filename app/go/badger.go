@@ -121,7 +121,7 @@ func initBadger() error {
 	}
 
 	var rideStatuses []struct {
-		RideID  string         `db:"ride_id"`
+		RideID  string         `db:"id"`
 		Status  string         `db:"status"`
 		ChairID sql.NullString `db:"chair_id"`
 		UserID  string         `db:"user_id"`
