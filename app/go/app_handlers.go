@@ -1087,13 +1087,6 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 
 	coordinate := Coordinate{Latitude: lat, Longitude: lon}
 
-	tx, err := db.Beginx()
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err)
-		return
-	}
-	defer tx.Rollback()
-
 	// Fetch all active chairs
 	chairs, err := activeChairsCache.Get(ctx, "activeChairs")
 	if err != nil {
