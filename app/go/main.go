@@ -226,6 +226,7 @@ func bindJSON(r *http.Request, v interface{}) error {
 
 func writeJSON(w http.ResponseWriter, statusCode int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
+	w.WriteHeader(statusCode)
 	err := sonic.ConfigFastest.NewEncoder(w).Encode(v)
 	if err != nil {
 		slog.Error("failed to encode response",
@@ -234,8 +235,6 @@ func writeJSON(w http.ResponseWriter, statusCode int, v interface{}) {
 		)
 		return
 	}
-
-	w.WriteHeader(statusCode)
 }
 
 func writeError(w http.ResponseWriter, r *http.Request, statusCode int, err error) {

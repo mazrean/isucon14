@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -231,15 +230,9 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	sb := &strings.Builder{}
-	sb.WriteString(`{"recorded_at":`)
-	sb.WriteString(fmt.Sprint(now.UnixMilli()))
-	sb.WriteString("}")
-	_, err := io.Copy(w, strings.NewReader(sb.String()))
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+	w.Write([]byte(`{"recorded_at":`))
+	w.Write([]byte(fmt.Sprint(now.UnixMilli())))
+	w.Write([]byte("}"))
 }
 
 func distance(lat1, lon1, lat2, lon2 int) int {
