@@ -1,6 +1,6 @@
 module github.com/isucon/isucon14/webapp/go
 
-go 1.23
+go 1.24rc1
 
 require (
 	github.com/go-chi/chi/v5 v5.1.0
