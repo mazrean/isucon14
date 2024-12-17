@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/bytedance/sonic"
-	"github.com/goccy/go-json"
 
 	"github.com/dgraph-io/badger"
 	"github.com/go-chi/chi/v5"
@@ -227,25 +226,30 @@ func bindJSON(r *http.Request, v interface{}) error {
 
 func writeJSON(w http.ResponseWriter, statusCode int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
-	buf, err := json.Marshal(v)
+	err := sonic.ConfigFastest.NewEncoder(w).Encode(v)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		slog.Error("failed to encode response",
+			slog.Int("status_code", statusCode),
+			slog.String("error", err.Error()),
+		)
 		return
 	}
+
 	w.WriteHeader(statusCode)
-	w.Write(buf)
 }
 
 func writeError(w http.ResponseWriter, r *http.Request, statusCode int, err error) {
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	w.WriteHeader(statusCode)
-	buf, marshalError := json.Marshal(map[string]string{"message": err.Error()})
-	if marshalError != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"error":"marshaling error failed"}`))
-		return
+
+	err = sonic.ConfigFastest.NewEncoder(w).Encode(map[string]string{"message": err.Error()})
+	if err != nil {
+		slog.Error("error response wrote",
+			slog.String("path", r.URL.Path),
+			slog.Int("status_code", statusCode),
+			slog.String("error", err.Error()),
+		)
 	}
-	w.Write(buf)
 
 	slog.Error("error response wrote",
 		slog.String("path", r.URL.Path),
