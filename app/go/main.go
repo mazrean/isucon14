@@ -180,6 +180,13 @@ func (rw *responseWriterInterceptor) WriteHeader(code int) {
 	}
 }
 
+func (rw *responseWriterInterceptor) Write(b []byte) (int, error) {
+	if rw.statusCode != http.StatusNotFound {
+		return rw.ResponseWriter.Write(b)
+	}
+	return 0, nil
+}
+
 type postInitializeRequest struct {
 	PaymentServer string `json:"payment_server"`
 }
