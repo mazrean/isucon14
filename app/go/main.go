@@ -175,9 +175,7 @@ type responseWriterInterceptor struct {
 
 func (rw *responseWriterInterceptor) WriteHeader(code int) {
 	rw.statusCode = code
-	if code != http.StatusNotFound {
-		rw.ResponseWriter.WriteHeader(code)
-	}
+	rw.ResponseWriter.WriteHeader(code)
 }
 
 type postInitializeRequest struct {
